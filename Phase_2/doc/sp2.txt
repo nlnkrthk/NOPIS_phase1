@@ -1,0 +1,73 @@
+
+--- Schema After Casting ---
+root
+ |-- timestamp: timestamp (nullable = true)
+ |-- grid_id: integer (nullable = true)
+ |-- country_code: integer (nullable = true)
+ |-- sms_in: double (nullable = true)
+ |-- sms_out: double (nullable = true)
+ |-- call_in: double (nullable = true)
+ |-- call_out: double (nullable = true)
+ |-- internet_activity: double (nullable = true)
+
+Distinct timestamps: 168                                                        
+Expected timestamps: 168
+
+--- Activity NULL Counts Before Cleaning ---
+sms_in: 9065620                                                                 
+sms_out: 11542655                                                               
+call_in: 10979856                                                               
+call_out: 8604862                                                               
+internet_activity: 8369201                                                      
+                                                                                
+Rejected rows: 0
+
+Rows before cleaning: 15089165
+Rows after cleaning: 15089165                                                   
+
+--- NULL Counts After Curated Cleaning ---
+sms_in: 0                                                                       
+sms_out: 0                                                                      
+call_in: 0                                                                      
+call_out: 0                                                                     
+internet_activity: 0                                                            
++-------------------+-------+------+-------+-------+--------+-----------------+---------+-----------+-------------------+
+|          timestamp|grid_id|sms_in|sms_out|call_in|call_out|internet_activity|total_sms|total_calls|     total_activity|
++-------------------+-------+------+-------+-------+--------+-----------------+---------+-----------+-------------------+
+|2013-11-01 00:00:00|      1|0.3521|    0.0|    0.0|  0.0273|              0.0|   0.3521|     0.0273|             0.3794|
+|2013-11-01 00:00:00|      1|   0.0|    0.0|    0.0|     0.0|           0.0261|      0.0|        0.0|             0.0261|
+|2013-11-01 00:00:00|      1|1.7322| 1.1047| 0.5919|   0.402|          57.7729|   2.8369|     0.9939|            61.6037|
+|2013-11-01 00:00:00|      2|0.3581|    0.0|    0.0|  0.0273|              0.0|   0.3581|     0.0273|0.38539999999999996|
+|2013-11-01 00:00:00|      2|   0.0|    0.0|    0.0|     0.0|           0.0274|      0.0|        0.0|             0.0274|
++-------------------+-------+------+-------+-------+--------+-----------------+---------+-----------+-------------------+
+only showing top 5 rows
++-------------------+----------+----+-----------+
+|          timestamp|      date|hour|day_of_week|
++-------------------+----------+----+-----------+
+|2013-11-01 00:00:00|2013-11-01|   0|          6|
+|2013-11-01 00:00:00|2013-11-01|   0|          6|
+|2013-11-01 00:00:00|2013-11-01|   0|          6|
+|2013-11-01 00:00:00|2013-11-01|   0|          6|
+|2013-11-01 00:00:00|2013-11-01|   0|          6|
+|2013-11-01 00:00:00|2013-11-01|   0|          6|
+|2013-11-01 00:00:00|2013-11-01|   0|          6|
+|2013-11-01 00:00:00|2013-11-01|   0|          6|
+|2013-11-01 00:00:00|2013-11-01|   0|          6|
+|2013-11-01 00:00:00|2013-11-01|   0|          6|
++-------------------+----------+----+-----------+
+only showing top 10 rows
+                                                                                
+--- SP2 Cleaning Summary ---
+Rows before cleaning: 15089165
+Rows after cleaning: 15089165
+Rejected rows: 0
+
+--- Activity NULLs Handled ---
+sms_in: 9065620                                                                 
+sms_out: 11542655                                                               
+call_in: 10979856                                                               
+call_out: 8604862                                                               
+internet_activity: 8369201                                                      
+
+Distinct timestamps after cleaning: 168
+Expected timestamps: 168

@@ -1,0 +1,329 @@
+
+--- SP3 Parquet Loaded ---
+Hourly grid summary rows: 1679994
++-------------------+-------+------------------+-------+-------+-------------------+------------------+----------+----+------------------+-----------+------------------+------------------+
+|          timestamp|grid_id|            sms_in|sms_out|call_in|           call_out| internet_activity|      date|hour|         total_sms|total_calls|    total_activity|    internet_share|
++-------------------+-------+------------------+-------+-------+-------------------+------------------+----------+----+------------------+-----------+------------------+------------------+
+|2013-11-01 00:00:00|    285|            0.2511| 0.1673| 0.1062|             0.0431|24.522799999999997|2013-11-01|   0|            0.4184|     0.1493|25.090499999999995|0.9773739064586199|
+|2013-11-01 00:00:00|    451|1.6143999999999998| 0.9351| 1.1166|             0.3747|121.16760000000002|2013-11-01|   0|            2.5495|     1.4913|125.20840000000003|0.9677274048705997|
+|2013-11-01 00:00:00|    525|            0.5106| 0.4048| 0.0984|0.14959999999999998|           34.3166|2013-11-01|   0|            0.9154|      0.248|35.480000000000004|0.9672096956031566|
+|2013-11-01 00:00:00|    606|            0.7717|  0.867| 0.0939|             0.1188|           21.5292|2013-11-01|   0|            1.6387|     0.2127|           23.3806|0.9208146925228607|
+|2013-11-01 00:00:00|    658|2.4640999999999997| 1.4538| 0.6357| 2.1266000000000003|          116.6293|2013-11-01|   0|3.9178999999999995|     2.7623|          123.3095| 0.945825747407945|
++-------------------+-------+------------------+-------+-------+-------------------+------------------+----------+----+------------------+-----------+------------------+------------------+
+only showing top 5 rows
+
+1--- GeoJSON Inspection ---
+Top-level type: FeatureCollection
+Number of features: 10000
+
+--- First Feature ---
+Feature type: Feature
+Top-level id: 0
+Properties: {'cellId': 1}
+Geometry type: Polygon
+
+2--- Grid Lookup ---
+Grid lookup rows: 10000
+First 5 lookup records:
+(1, '{"type": "Polygon", "coordinates": [[[9.0114910478323, 45.35880131440966], [9.014491488013135, 45.35880097314403], [9.0144909480813, 45.35668565341486], [9.011490619692509, 45.356685994655464], [9.0114910478323, 45.35880131440966]]]}')
+(2, '{"type": "Polygon", "coordinates": [[[9.014491488013135, 45.35880097314403], [9.017491928134044, 45.358800553060284], [9.017491276410173, 45.35668523336193], [9.0144909480813, 45.35668565341486], [9.014491488013135, 45.35880097314403]]]}')
+(3, '{"type": "Polygon", "coordinates": [[[9.017491928134044, 45.358800553060284], [9.02049236818262, 45.35880005415845], [9.020491604666724, 45.356684734496675], [9.017491276410173, 45.35668523336193], [9.017491928134044, 45.358800553060284]]]}')
+(4, '{"type": "Polygon", "coordinates": [[[9.02049236818262, 45.35880005415845], [9.023492808146456, 45.35879947643852], [9.023491932838542, 45.35668415681913], [9.020491604666724, 45.356684734496675], [9.02049236818262, 45.35880005415845]]]}')
+(5, '{"type": "Polygon", "coordinates": [[[9.023492808146456, 45.35879947643852], [9.026493248013145, 45.35879881990051], [9.02649226091323, 45.35668350032926], [9.023491932838542, 45.35668415681913], [9.023492808146456, 45.35879947643852]]]}')
+
+--- Grid Lookup Validation ---
+Grid lookup created successfully.
+Grid lookup rows: 10000
+
+--- Spark Grid Lookup ---
+root
+ |-- grid_id: integer (nullable = false)
+ |-- geometry: string (nullable = false)
+
+26/08/27 20:40:06 WARN TaskSetManager: Stage 5 contains a task of very large size (2412 KiB). The maximum recommended task size is 1000 KiB.
+[Stage 5:>                                                          (0 + 1)Traceback (most recent call last):
+  File "C:\Users\nalin.karthik\AppData\Local\Programs\Python\Python313\Lib\site-packages\pyspark\python\lib\pyspark.zip\pyspark\worker.py", line 3622, in main
+    process()
+    ~~~~~~~^^
+  File "C:\Users\nalin.karthik\AppData\Local\Programs\Python\Python313\Lib\site-packages\pyspark\python\lib\pyspark.zip\pyspark\worker.py", line 3612, in process
+    serializer.dump_stream(out_iter, outfile)
+    ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\nalin.karthik\AppData\Local\Programs\Python\Python313\Lib\site-packages\pyspark\python\lib\pyspark.zip\pyspark\serializers.py", line 263, in dump_stream
+    stream.write(bytes)
+    ~~~~~~~~~~~~^^^^^^^
+  File "C:\Users\nalin.karthik\AppData\Local\Programs\Python\Python313\Lib\socket.py", line 737, in write
+    return self._sock.send(b)
+           ~~~~~~~~~~~~~~~^^^
+ConnectionResetError: [WinError 10054] An existing connection was forcibly closed by the remote host
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+                                                                             File "C:\Users\nalin.karthik\AppData\Local\Programs\Python\Python313\Lib\site-packages\pyspark\python\lib\pyspark.zip\pyspark\worker_util.py", line 211, in get_sock_file_to_executor
+    yield sock_file
+  File "C:\Users\nalin.karthik\AppData\Local\Programs\Python\Python313\Lib\site-packages\pyspark\python\lib\pyspark.zip\pyspark\worker.py", line 3652, in <module>
+    main(sock_file, sock_file)
+    ~~~~^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\nalin.karthik\AppData\Local\Programs\Python\Python313\Lib\site-packages\pyspark\python\lib\pyspark.zip\pyspark\util.py", line 1019, in wrapper
+    return func(*args, **kwargs)
+  File "C:\Users\nalin.karthik\AppData\Local\Programs\Python\Python313\Lib\site-packages\pyspark\python\lib\pyspark.zip\pyspark\worker.py", line 3631, in main
+    sys.exit(-1)
+    ~~~~~~~~^^^^
+SystemExit: -1
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "<frozen runpy>", line 198, in _run_module_as_main
+  File "<frozen runpy>", line 88, in _run_code
+  File "C:\Users\nalin.karthik\AppData\Local\Programs\Python\Python313\Lib\site-packages\pyspark\python\lib\pyspark.zip\pyspark\worker.py", line 3651, in <module>
+    with get_sock_file_to_executor() as sock_file:
+         ~~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\nalin.karthik\AppData\Local\Programs\Python\Python313\Lib\contextlib.py", line 162, in __exit__
+    self.gen.throw(value)
+    ~~~~~~~~~~~~~~^^^^^^^
+  File "C:\Users\nalin.karthik\AppData\Local\Programs\Python\Python313\Lib\site-packages\pyspark\python\lib\pyspark.zip\pyspark\worker_util.py", line 213, in get_sock_file_to_executor
+    sock_file.close()
+    ~~~~~~~~~~~~~~~^^
+  File "C:\Users\nalin.karthik\AppData\Local\Programs\Python\Python313\Lib\socket.py", line 737, in write
+    return self._sock.send(b)
+           ~~~~~~~~~~~~~~~^^^
+ConnectionResetError: [WinError 10054] An existing connection was forcibly closed by the remote host
++-------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+|grid_id|geometry                                                                                                                                                                                                                                        |
++-------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+|1      |{"type": "Polygon", "coordinates": [[[9.0114910478323, 45.35880131440966], [9.014491488013135, 45.35880097314403], [9.0144909480813, 45.35668565341486], [9.011490619692509, 45.356685994655464], [9.0114910478323, 45.35880131440966]]]}       |
+|2      |{"type": "Polygon", "coordinates": [[[9.014491488013135, 45.35880097314403], [9.017491928134044, 45.358800553060284], [9.017491276410173, 45.35668523336193], [9.0144909480813, 45.35668565341486], [9.014491488013135, 45.35880097314403]]]}   |
+|3      |{"type": "Polygon", "coordinates": [[[9.017491928134044, 45.358800553060284], [9.02049236818262, 45.35880005415845], [9.020491604666724, 45.356684734496675], [9.017491276410173, 45.35668523336193], [9.017491928134044, 45.358800553060284]]]}|
+|4      |{"type": "Polygon", "coordinates": [[[9.02049236818262, 45.35880005415845], [9.023492808146456, 45.35879947643852], [9.023491932838542, 45.35668415681913], [9.020491604666724, 45.356684734496675], [9.02049236818262, 45.35880005415845]]]}   |
+|5      |{"type": "Polygon", "coordinates": [[[9.023492808146456, 45.35879947643852], [9.026493248013145, 45.35879881990051], [9.02649226091323, 45.35668350032926], [9.023491932838542, 45.35668415681913], [9.023492808146456, 45.35879947643852]]]}   |
++-------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+only showing top 5 rows
+
+--- Spark Grid Lookup ---
+root
+ |-- grid_id: integer (nullable = false)
+ |-- geometry: string (nullable = false)
+
+26/08/27 20:40:07 WARN TaskSetManager: Stage 6 contains a task of very large size (2412 KiB). The maximum recommended task size is 1000 KiB.
+[Stage 6:>                                                          (0 + 1)                                                                           Traceback (most recent call last):
+  File "C:\Users\nalin.karthik\AppData\Local\Programs\Python\Python313\Lib\site-packages\pyspark\python\lib\pyspark.zip\pyspark\worker.py", line 3622, in main
+    process()
+    ~~~~~~~^^
+  File "C:\Users\nalin.karthik\AppData\Local\Programs\Python\Python313\Lib\site-packages\pyspark\python\lib\pyspark.zip\pyspark\worker.py", line 3612, in process
+    serializer.dump_stream(out_iter, outfile)
+    ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\nalin.karthik\AppData\Local\Programs\Python\Python313\Lib\site-packages\pyspark\python\lib\pyspark.zip\pyspark\serializers.py", line 257, in dump_stream
+    vs = list(itertools.islice(iterator, batch))
+  File "C:\Users\nalin.karthik\AppData\Local\Programs\Python\Python313\Lib\site-packages\pyspark\python\lib\pyspark.zip\pyspark\serializers.py", line 149, in load_stream
+    yield self._read_with_length(stream)
+          ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^
+  File "C:\Users\nalin.karthik\AppData\Local\Programs\Python\Python313\Lib\site-packages\pyspark\python\lib\pyspark.zip\pyspark\serializers.py", line 168, in _read_with_length
+    obj = stream.read(length)
+  File "C:\Users\nalin.karthik\AppData\Local\Programs\Python\Python313\Lib\socket.py", line 719, in readinto
+    return self._sock.recv_into(b)
+           ~~~~~~~~~~~~~~~~~~~~^^^
+ConnectionResetError: [WinError 10054] An existing connection was forcibly closed by the remote host
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\nalin.karthik\AppData\Local\Programs\Python\Python313\Lib\site-packages\pyspark\python\lib\pyspark.zip\pyspark\worker_util.py", line 211, in get_sock_file_to_executor
+    yield sock_file
+  File "C:\Users\nalin.karthik\AppData\Local\Programs\Python\Python313\Lib\site-packages\pyspark\python\lib\pyspark.zip\pyspark\worker.py", line 3652, in <module>
+    main(sock_file, sock_file)
+    ~~~~^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\nalin.karthik\AppData\Local\Programs\Python\Python313\Lib\site-packages\pyspark\python\lib\pyspark.zip\pyspark\util.py", line 1019, in wrapper
+    return func(*args, **kwargs)
+  File "C:\Users\nalin.karthik\AppData\Local\Programs\Python\Python313\Lib\site-packages\pyspark\python\lib\pyspark.zip\pyspark\worker.py", line 3631, in main
+    sys.exit(-1)
+    ~~~~~~~~^^^^
+SystemExit: -1
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
++-------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+|grid_id|geometry                                                                                                                                                                                                                                        |
++-------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+|1      |{"type": "Polygon", "coordinates": [[[9.0114910478323, 45.35880131440966], [9.014491488013135, 45.35880097314403], [9.0144909480813, 45.35668565341486], [9.011490619692509, 45.356685994655464], [9.0114910478323, 45.35880131440966]]]}       |
+|2      |{"type": "Polygon", "coordinates": [[[9.014491488013135, 45.35880097314403], [9.017491928134044, 45.358800553060284], [9.017491276410173, 45.35668523336193], [9.0144909480813, 45.35668565341486], [9.014491488013135, 45.35880097314403]]]}   |
+|3      |{"type": "Polygon", "coordinates": [[[9.017491928134044, 45.358800553060284], [9.02049236818262, 45.35880005415845], [9.020491604666724, 45.356684734496675], [9.017491276410173, 45.35668523336193], [9.017491928134044, 45.358800553060284]]]}|
+|4      |{"type": "Polygon", "coordinates": [[[9.02049236818262, 45.35880005415845], [9.023492808146456, 45.35879947643852], [9.023491932838542, 45.35668415681913], [9.020491604666724, 45.356684734496675], [9.02049236818262, 45.35880005415845]]]}   |
+|5      |{"type": "Polygon", "coordinates": [[[9.023492808146456, 45.35879947643852], [9.026493248013145, 45.35879881990051], [9.02649226091323, 45.35668350032926], [9.023491932838542, 45.35668415681913], [9.023492808146456, 45.35879947643852]]]}   |
++-------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+only showing top 5 rows
+  File "<frozen runpy>", line 198, in _run_module_as_main
+  File "<frozen runpy>", line 88, in _run_code
+  File "C:\Users\nalin.karthik\AppData\Local\Programs\Python\Python313\Lib\site-packages\pyspark\python\lib\pyspark.zip\pyspark\worker.py", line 3651, in <module>
+    with get_sock_file_to_executor() as sock_file:
+         ~~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\nalin.karthik\AppData\Local\Programs\Python\Python313\Lib\contextlib.py", line 162, in __exit__
+    self.gen.throw(value)
+    ~~~~~~~~~~~~~~^^^^^^^
+  File "C:\Users\nalin.karthik\AppData\Local\Programs\Python\Python313\Lib\site-packages\pyspark\python\lib\pyspark.zip\pyspark\worker_util.py", line 213, in get_sock_file_to_executor
+    sock_file.close()
+    ~~~~~~~~~~~~~~~^^
+  File "C:\Users\nalin.karthik\AppData\Local\Programs\Python\Python313\Lib\socket.py", line 737, in write
+    return self._sock.send(b)
+           ~~~~~~~~~~~~~~~^^^
+ConnectionResetError: [WinError 10054] An existing connection was forcibly closed by the remote host
+
+---5 -  SP4 Geospatial Enrichment ---
+Rows before join: 1679994
+26/08/27 20:40:08 WARN TaskSetManager: Stage 10 contains a task of very large size (2412 KiB). The maximum recommended task size is 1000 KiB.
+[Stage 10:>                                                         (0 + 1)                                                                           Rows after join: 1679994
+26/08/27 20:40:10 WARN TaskSetManager: Stage 14 contains a task of very large size (2412 KiB). The maximum recommended task size is 1000 KiB.
+[Stage 14:>                                                         (0 + 1)                                                                           +-------+-------------------+------------------+-------+-------+-------------------+------------------+----------+----+------------------+-----------+------------------+------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+|grid_id|timestamp          |sms_in            |sms_out|call_in|call_out           |internet_activity |date      |hour|total_sms         |total_calls|total_activity    |internet_share    |geometry                                                                                                                                                                                                                                       |
++-------+-------------------+------------------+-------+-------+-------------------+------------------+----------+----+------------------+-----------+------------------+------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+|285    |2013-11-01 00:00:00|0.2511            |0.1673 |0.1062 |0.0431             |24.522799999999997|2013-11-01|0   |0.4184            |0.1493     |25.090499999999995|0.9773739064586199|{"type": "Polygon", "coordinates": [[[9.263546272135315, 45.36272848292268], [9.266546887638912, 45.362721520013], [9.266536955166833, 45.36060622460115], [9.263536451473525, 45.36061318700013], [9.263546272135315, 45.36272848292268]]]}   |
+|451    |2013-11-01 00:00:00|1.6143999999999998|0.9351 |1.1166 |0.3747             |121.16760000000002|2013-11-01|0   |2.5495            |1.4913     |125.20840000000003|0.9677274048705997|{"type": "Polygon", "coordinates": [[[9.161536817755321, 45.36714893705125], [9.164537687023191, 45.367144653646456], [9.164531554812969, 45.36502934568931], [9.161530797384305, 45.36503362877992], [9.161536817755321, 45.36714893705125]]]}|
+|525    |2013-11-01 00:00:00|0.5106            |0.4048 |0.0984 |0.14959999999999998|34.3166           |2013-11-01|0   |0.9154            |0.248      |35.480000000000004|0.9672096956031566|{"type": "Polygon", "coordinates": [[[9.083517131416535, 45.36934794624181], [9.08651812587776, 45.3693457125257], [9.086514901154178, 45.367230399066486], [9.083514018546392, 45.36723263261876], [9.083517131416535, 45.36934794624181]]]}  |
+|606    |2013-11-01 00:00:00|0.7717            |0.867  |0.0939 |0.1188             |21.5292           |2013-11-01|0   |1.6387            |0.2127     |23.3806           |0.9208146925228607|{"type": "Polygon", "coordinates": [[[9.026499172913816, 45.37149072080459], [9.029500283683486, 45.3714899851248], [9.029499184059558, 45.369374670328476], [9.026498185156345, 45.3693754059543], [9.026499172913816, 45.37149072080459]]]}  |
+|658    |2013-11-01 00:00:00|2.4640999999999997|1.4538 |0.6357 |2.1266000000000003 |116.6293          |2013-11-01|0   |3.9178999999999995|2.7623     |123.3095          |0.945825747407945 |{"type": "Polygon", "coordinates": [[[9.182556496654495, 45.371347907119144], [9.185557584611336, 45.37134307112638], [9.18555066799414, 45.36922776710557], [9.182549691900649, 45.36923260274364], [9.182556496654495, 45.371347907119144]]]}|
++-------+-------------------+------------------+-------+-------+-------------------+------------------+----------+----+------------------+-----------+------------------+------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+only showing top 5 rows
+
+--- 6 - SP4 Join Validation ---
+[Stage 16:=============================>                            (1 + 1)                                                                           26/08/27 20:40:12 WARN TaskSetManager: Stage 22 contains a task of very large size (2412 KiB). The maximum recommended task size is 1000 KiB.
+[Stage 22:>                                                         (0 + 1)                                                                           [Stage 28:=========>        (1 + 1) / 2][Stage 29:>                 (0 + 0)26/08/27 20:40:14 WARN TaskSetManager: Stage 29 contains a task of very large size (2412 KiB). The maximum recommended task size is 1000 KiB.
+[Stage 29:>                                                         (0 + 1)                                                                           Distinct activity grids before join: 10000
+Distinct grids in lookup: 10000
+Unmatched grid IDs: 0
+Enrichment coverage: 100.0 %
+
+--- Unmatched Grid IDs ---
+No unmatched grid IDs.
+
+--- 7 - Geographic Spot Check ---
+
+Grid 1 centroid:
+Longitude: 9.01299102590481
+Latitude: 45.357743483906006
+
+Grid 2 centroid:
+Longitude: 9.015991410159662
+Latitude: 45.35774310324528
+
+Approximate centroid distance: 0.0030003842789993896
+
+Grid 285 centroid:
+Longitude: 9.265041641603647
+Latitude: 45.36166735363424
+
+Geographic spot-check PASSED!
+
+--- 8 - Standard Join Execution Plan ---
+== Physical Plan ==
+AdaptiveSparkPlan isFinalPlan=false
++- Project [grid_id#1, timestamp#0, sms_in#2, sms_out#3, call_in#4, call_out#5, internet_activity#6, date#7, hour#8, total_sms#9, total_calls#10, total_activity#11, internet_share#12, geometry#72]
+   +- SortMergeJoin [grid_id#1], [grid_id#71], LeftOuter
+      :- Sort [grid_id#1 ASC NULLS FIRST], false, 0
+      :  +- Exchange hashpartitioning(grid_id#1, 200), ENSURE_REQUIREMENTS, [plan_id=736]
+      :     +- FileScan parquet [timestamp#0,grid_id#1,sms_in#2,sms_out#3,call_in#4,call_out#5,internet_activity#6,date#7,hour#8,total_sms#9,total_calls#10,total_activity#11,internet_share#12] Batched: true, DataFilters: [], Format: Parquet, Location: InMemoryFileIndex(1 paths)[file:/D:/NOPIS/Phase_2/outputs/hourly_grid_summary], PartitionFilters: [], PushedFilters: [], ReadSchema: struct<timestamp:timestamp,grid_id:int,sms_in:double,sms_out:double,call_in:double,call_out:doubl...
+      +- Sort [grid_id#71 ASC NULLS FIRST], false, 0
+         +- Exchange hashpartitioning(grid_id#71, 200), ENSURE_REQUIREMENTS, [plan_id=737]
+            +- Scan ExistingRDD[grid_id#71,geometry#72]
+
+
+
+--- 8 - Broadcast Join Execution Plan ---
+== Physical Plan ==
+AdaptiveSparkPlan isFinalPlan=false
++- Project [grid_id#1, timestamp#0, sms_in#2, sms_out#3, call_in#4, call_out#5, internet_activity#6, date#7, hour#8, total_sms#9, total_calls#10, total_activity#11, internet_share#12, geometry#72]
+   +- BroadcastHashJoin [grid_id#1], [grid_id#71], LeftOuter, BuildRight, false, false
+      :- FileScan parquet [timestamp#0,grid_id#1,sms_in#2,sms_out#3,call_in#4,call_out#5,internet_activity#6,date#7,hour#8,total_sms#9,total_calls#10,total_activity#11,internet_share#12] Batched: true, DataFilters: [], Format: Parquet, Location: InMemoryFileIndex(1 paths)[file:/D:/NOPIS/Phase_2/outputs/hourly_grid_summary], PartitionFilters: [], PushedFilters: [], ReadSchema: struct<timestamp:timestamp,grid_id:int,sms_in:double,sms_out:double,call_in:double,call_out:doubl...
+      +- BroadcastExchange HashedRelationBroadcastMode(List(cast(input[0, int, false] as bigint)),false), [plan_id=758]
+         +- Scan ExistingRDD[grid_id#71,geometry#72]
+
+
+
+--- Broadcast Join Explanation ---
+Grid lookup contains only 10,000 rows.
+Activity DataFrame contains 1,679,994 rows.
+The grid lookup is much smaller than the activity data.
+Therefore, it is a good candidate for a broadcast join.
+Broadcasting allows Spark to send the small lookup to
+the workers instead of performing a large shuffle join.
+
+--- 9 - SP4 Geospatial Enrichment ---
+Enriched DataFrame created successfully!
+
+--- Enriched Dataset Schema ---
+root
+ |-- timestamp: timestamp (nullable = true)
+ |-- grid_id: integer (nullable = true)
+ |-- sms_in: double (nullable = true)
+ |-- sms_out: double (nullable = true)
+ |-- call_in: double (nullable = true)
+ |-- call_out: double (nullable = true)
+ |-- internet_activity: double (nullable = true)
+ |-- total_activity: double (nullable = true)
+ |-- geometry: string (nullable = true)
+
+
+--- Saving SP4 Enriched Dataset ---
+26/08/27 20:40:16 WARN TaskSetManager: Stage 37 contains a task of very large size (2412 KiB). The maximum recommended task size is 1000 KiB.
+[Stage 37:>                                                         (0 + 1)                                                                           [Stage 38:>                                                         (0 + 1)[Stage 38:=============================>                            (1 + 1)                                                                           SP4 enriched dataset saved successfully!
+Saved to: D:\NOPIS\Phase_2\outputs\grid_activity_geo
+
+--- 10 - Top High-Activity Grids ---
+Selected date: 2013-11-01
+Top 10 high-activity grids:
+26/08/27 20:40:22 WARN TaskSetManager: Stage 39 contains a task of very large size (2412 KiB). The maximum recommended task size is 1000 KiB.
+[Stage 39:>                                                         (0 + 1)                                                                           [Stage 40:=============================>                            (1 + 1)                                                                           +-------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+------------------+
+|grid_id|geometry                                                                                                                                                                                                                                         |activity          |
++-------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+------------------+
+|5161   |{"type": "Polygon", "coordinates": [[[9.191881895653262, 45.46652099559057], [9.194888027983293, 45.466515906273756], [9.194880739442098, 45.46440063879739], [9.19187471953554, 45.46440572774091], [9.191881895653262, 45.46652099559057]]]}   |274800.2956       |
+|5059   |{"type": "Polygon", "coordinates": [[[9.185862677342813, 45.464415668310075], [9.188868698831616, 45.4644107375785], [9.188861635922354, 45.462295468573735], [9.18585572684475, 45.46230039894366], [9.185862677342813, 45.464415668310075]]]}  |197968.34380000003|
+|5758   |{"type": "Polygon", "coordinates": [[[9.182904542971766, 45.47922738594021], [9.18591135246194, 45.479222531822955], [9.185904396554967, 45.477107267969544], [9.182897699563574, 45.47711212173076], [9.182904542971766, 45.47922738594021]]]}  |143489.2707       |
+|5061   |{"type": "Polygon", "coordinates": [[[9.19187471953554, 45.46440572774091], [9.194880739442098, 45.46440063879739], [9.194873451710762, 45.46228537053336], [9.191867544215187, 45.46229045910362], [9.19187471953554, 45.46440572774091]]]}     |137435.4867       |
+|5955   |{"type": "Polygon", "coordinates": [[[9.173897123979426, 45.483472001534516], [9.176904160749636, 45.48346738418029], [9.176897540867992, 45.48135212085112], [9.173890616621877, 45.481356737866676], [9.173897123979426, 45.483472001534516]]]}|135844.95560000002|
+|5262   |{"type": "Polygon", "coordinates": [[[9.194895317334458, 45.46863117296248], [9.197901561290374, 45.468626004154856], [9.197894159503353, 45.466510737845255], [9.194888027983293, 45.466515906273756], [9.194895317334458, 45.46863117296248]]]}|131322.87589999998|
+|6064   |{"type": "Polygon", "coordinates": [[[9.20096794827798, 45.48554285526971], [9.203975090511255, 45.485537525100405], [9.20396745706909, 45.483422265868334], [9.200960427371452, 45.48342759564669], [9.20096794827798, 45.48554285526971]]]}    |126818.90530000001|
+|5162   |{"type": "Polygon", "coordinates": [[[9.194888027983293, 45.466515906273756], [9.197894159503353, 45.466510737845255], [9.197886758538793, 45.46439547074798], [9.194880739442098, 45.46440063879739], [9.194888027983293, 45.466515906273756]]]}|124664.3217       |
+|4857   |{"type": "Polygon", "coordinates": [[[9.179837181457144, 45.46019475152285], [9.182842979667898, 45.46018997970351], [9.182836143100612, 45.458074708406144], [9.179830457276287, 45.45807947987548], [9.179837181457144, 45.46019475152285]]]}  |121991.82320000001|
+|4856   |{"type": "Polygon", "coordinates": [[[9.176831382499191, 45.46019944424763], [9.179837181457144, 45.46019475152285], [9.179830457276287, 45.45807947987548], [9.176824770704865, 45.45808417225606], [9.176831382499191, 45.46019944424763]]]}   |114005.33699999998|
++-------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+------------------+
+
+
+--- Saving Top High-Activity Grids ---
+26/08/27 20:40:24 WARN TaskSetManager: Stage 43 contains a task of very large size (2412 KiB). The maximum recommended task size is 1000 KiB.
+[Stage 43:>                                                         (0 + 1)                                                                           [Stage 44:>                                                         (0 + 1)[Stage 44:=============================>                            (1 + 1)                                                                           Top high-activity grids saved successfully!
+Saved to: D:\NOPIS\Phase_2\outputs\top_high_activity_grids
+C:\Users\nalin.karthik\AppData\Local\Programs\Python\Python313\Lib\site-packages\pyspark\sql\udf.py:116: FutureWarning: PySpark does not yet fully support pandas >= 3.0.0. Some features may not work correctly. It is recommended to use pandas < 3.0.0 for now.
+  require_minimum_pandas_version()
+C:\Users\nalin.karthik\AppData\Local\Programs\Python\Python313\Lib\site-packages\pyspark\sql\udf.py:120: RuntimeWarning: Arrow optimization failed to enable because PyArrow or Pandas is not installed. Falling back to a non-Arrow-optimized UDF.
+  warnings.warn(
+
+--- 11 - Grid Centroids ---
+26/08/27 20:40:27 WARN TaskSetManager: Stage 47 contains a task of very large size (2412 KiB). The maximum recommended task size is 1000 KiB.
+[Stage 47:>                                                         (0 + 1)                                                                           [Stage 48:=============================>                            (1 + 1)                                                                           [Stage 55:>                                                         (0 + 1)                                                                           +-------+------------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+------------------+------------------+
+|grid_id|activity          |geometry                                                                                                                                                                                                                                         |centroid_longitude|centroid_latitude |
++-------+------------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+------------------+------------------+
+|5161   |274800.2956       |{"type": "Polygon", "coordinates": [[[9.191881895653262, 45.46652099559057], [9.194888027983293, 45.466515906273756], [9.194880739442098, 45.46440063879739], [9.19187471953554, 45.46440572774091], [9.191881895653262, 45.46652099559057]]]}   |9.193381345653549 |45.465460817100656|
+|5059   |197968.34380000003|{"type": "Polygon", "coordinates": [[[9.185862677342813, 45.464415668310075], [9.188868698831616, 45.4644107375785], [9.188861635922354, 45.462295468573735], [9.18585572684475, 45.46230039894366], [9.185862677342813, 45.464415668310075]]]}  |9.187362184735383 |45.46335556835149 |
+|5758   |143489.2707       |{"type": "Polygon", "coordinates": [[[9.182904542971766, 45.47922738594021], [9.18591135246194, 45.479222531822955], [9.185904396554967, 45.477107267969544], [9.182897699563574, 45.47711212173076], [9.182904542971766, 45.47922738594021]]]}  |9.184404497888062 |45.47816732686587 |
+|5061   |137435.4867       |{"type": "Polygon", "coordinates": [[[9.19187471953554, 45.46440572774091], [9.194880739442098, 45.46440063879739], [9.194873451710762, 45.46228537053336], [9.191867544215187, 45.46229045910362], [9.19187471953554, 45.46440572774091]]]}     |9.193374113725897 |45.46334554904382 |
+|5955   |135844.95560000002|{"type": "Polygon", "coordinates": [[[9.173897123979426, 45.483472001534516], [9.176904160749636, 45.48346738418029], [9.176897540867992, 45.48135212085112], [9.173890616621877, 45.481356737866676], [9.173897123979426, 45.483472001534516]]]}|9.175397360554733 |45.48241206110815 |
+|5262   |131322.87589999998|{"type": "Polygon", "coordinates": [[[9.194895317334458, 45.46863117296248], [9.197901561290374, 45.468626004154856], [9.197894159503353, 45.466510737845255], [9.194888027983293, 45.466515906273756], [9.194895317334458, 45.46863117296248]]]}|9.19639476652787  |45.467570955309085|
+|6064   |126818.90530000001|{"type": "Polygon", "coordinates": [[[9.20096794827798, 45.48554285526971], [9.203975090511255, 45.485537525100405], [9.20396745706909, 45.483422265868334], [9.200960427371452, 45.48342759564669], [9.20096794827798, 45.48554285526971]]]}    |9.202467730807445 |45.484482560471285|
+|5162   |124664.3217       |{"type": "Polygon", "coordinates": [[[9.194888027983293, 45.466515906273756], [9.197894159503353, 45.466510737845255], [9.197886758538793, 45.46439547074798], [9.194880739442098, 45.46440063879739], [9.194888027983293, 45.466515906273756]]]}|9.196387421366884 |45.4654556884161  |
+|4857   |121991.82320000001|{"type": "Polygon", "coordinates": [[[9.179837181457144, 45.46019475152285], [9.182842979667898, 45.46018997970351], [9.182836143100612, 45.458074708406144], [9.179830457276287, 45.45807947987548], [9.179837181457144, 45.46019475152285]]]}  |9.181336690375485 |45.45913472987699 |
+|4856   |114005.33699999998|{"type": "Polygon", "coordinates": [[[9.176831382499191, 45.46019944424763], [9.179837181457144, 45.46019475152285], [9.179830457276287, 45.45807947987548], [9.176824770704865, 45.45808417225606], [9.176831382499191, 45.46019944424763]]]}   |9.17833094798437  |45.459139461975504|
++-------+------------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+------------------+------------------+
+
+26/08/27 20:40:30 WARN TaskSetManager: Stage 56 contains a task of very large size (2412 KiB). The maximum recommended task size is 1000 KiB.
+[Stage 56:>                                                         (0 + 1)                                                                           [Stage 57:>                                                         (0 + 1)[Stage 57:=============================>                            (1 + 1)                                                                           [Stage 64:>                                                         (0 + 1)                                                                                
+Top high-activity grids with centroids saved successfully!
+
+
+--- 12 - Broadcast Join Execution Plan ---
+== Physical Plan ==
+AdaptiveSparkPlan isFinalPlan=false
++- Project [grid_id#1, timestamp#0, sms_in#2, sms_out#3, call_in#4, call_out#5, internet_activity#6, date#7, hour#8, total_sms#9, total_calls#10, total_activity#11, internet_share#12, geometry#72]
+   +- BroadcastHashJoin [grid_id#1], [grid_id#71], LeftOuter, BuildRight, false, false
+      :- FileScan parquet [timestamp#0,grid_id#1,sms_in#2,sms_out#3,call_in#4,call_out#5,internet_activity#6,date#7,hour#8,total_sms#9,total_calls#10,total_activity#11,internet_share#12] Batched: true, DataFilters: [], Format: Parquet, Location: InMemoryFileIndex(1 paths)[file:/D:/NOPIS/Phase_2/outputs/hourly_grid_summary], PartitionFilters: [], PushedFilters: [], ReadSchema: struct<timestamp:timestamp,grid_id:int,sms_in:double,sms_out:double,call_in:double,call_out:doubl...
+      +- BroadcastExchange HashedRelationBroadcastMode(List(cast(input[0, int, false] as bigint)),false), [plan_id=1905]
+         +- Scan ExistingRDD[grid_id#71,geometry#72]

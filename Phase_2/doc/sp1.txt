@@ -1,0 +1,73 @@
+Files found: 7
+D:\NOPIS\data\sms-call-internet-mi-2013-11-01.csv
+D:\NOPIS\data\sms-call-internet-mi-2013-11-02.csv
+D:\NOPIS\data\sms-call-internet-mi-2013-11-03.csv
+D:\NOPIS\data\sms-call-internet-mi-2013-11-04.csv
+D:\NOPIS\data\sms-call-internet-mi-2013-11-05.csv
+D:\NOPIS\data\sms-call-internet-mi-2013-11-06.csv
+D:\NOPIS\data\sms-call-internet-mi-2013-11-07.csv
+root
+ |-- datetime: timestamp (nullable = true)
+ |-- CellID: integer (nullable = true)
+ |-- countrycode: integer (nullable = true)
+ |-- smsin: double (nullable = true)
+ |-- smsout: double (nullable = true)
+ |-- callin: double (nullable = true)
+ |-- callout: double (nullable = true)
+ |-- internet: double (nullable = true)
+
++-------------------+------+-----------+------+------+------+-------+--------+
+|datetime           |CellID|countrycode|smsin |smsout|callin|callout|internet|
++-------------------+------+-----------+------+------+------+-------+--------+
+|2013-11-01 00:00:00|1     |0          |0.3521|NULL  |NULL  |0.0273 |NULL    |
+|2013-11-01 00:00:00|1     |33         |NULL  |NULL  |NULL  |NULL   |0.0261  |
+|2013-11-01 00:00:00|1     |39         |1.7322|1.1047|0.5919|0.402  |57.7729 |
+|2013-11-01 00:00:00|2     |0          |0.3581|NULL  |NULL  |0.0273 |NULL    |
+|2013-11-01 00:00:00|2     |33         |NULL  |NULL  |NULL  |NULL   |0.0274  |
++-------------------+------+-----------+------+------+------+-------+--------+
+only showing top 5 rows
+                                                                                
+--- Manual Schema ---
+root
+ |-- datetime: timestamp (nullable = true)
+ |-- CellID: integer (nullable = true)
+ |-- countrycode: integer (nullable = true)
+ |-- smsin: double (nullable = true)
+ |-- smsout: double (nullable = true)
+ |-- callin: double (nullable = true)
+ |-- callout: double (nullable = true)
+ |-- internet: double (nullable = true)
+
+
+--- Inferred Schema ---
+root
+ |-- datetime: timestamp (nullable = true)
+ |-- CellID: integer (nullable = true)
+ |-- countrycode: integer (nullable = true)
+ |-- smsin: double (nullable = true)
+ |-- smsout: double (nullable = true)
+ |-- callin: double (nullable = true)
+ |-- callout: double (nullable = true)
+ |-- internet: double (nullable = true)
+
+                                                                                
+--- SP1 Question 4 Results ---
+Row count: 15089165
+Unique grids: 10000
+Country-code categories: 326
+Distinct hourly intervals: 168
++-------------------+------+-----------+---------------------------------------------------------+
+|datetime           |CellID|countrycode|input_file_name                                          |
++-------------------+------+-----------+---------------------------------------------------------+
+|2013-11-01 00:00:00|1     |0          |file:///D:/NOPIS/data/sms-call-internet-mi-2013-11-01.csv|
+|2013-11-01 00:00:00|1     |33         |file:///D:/NOPIS/data/sms-call-internet-mi-2013-11-01.csv|
+|2013-11-01 00:00:00|1     |39         |file:///D:/NOPIS/data/sms-call-internet-mi-2013-11-01.csv|
+|2013-11-01 00:00:00|2     |0          |file:///D:/NOPIS/data/sms-call-internet-mi-2013-11-01.csv|
+|2013-11-01 00:00:00|2     |33         |file:///D:/NOPIS/data/sms-call-internet-mi-2013-11-01.csv|
++-------------------+------+-----------+---------------------------------------------------------+
+only showing top 5 rows
+Source file count: 7                                                            
+Partition count: 15
+Minimum CellID: 1                                                               
+Maximum CellID: 10000                                                           
+Rows with missing input_file_name: 0
