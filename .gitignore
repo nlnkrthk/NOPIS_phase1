@@ -15,3 +15,7 @@ __pycache__/
 outputs/
 
 winutils/
+tmp/
+NOPIStmpspark_temp/
+
+spark/output/
