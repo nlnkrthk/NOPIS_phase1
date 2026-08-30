@@ -1,25 +1,34 @@
-# NOPIS Telecom Pipeline — Job Contract (SP7)
+# NOPIS Telecom Pipeline — Job Contract (SP7 / DE2)
 
 ## Overview
 
-The telecom pipeline is a **batch ETL job** that reads raw Milan telecom
-activity CSVs, cleans and standardizes the data, aggregates to the
+The telecom pipeline is a **batch ETL job** that validates incoming Milan telecom
+activity CSVs from the landing drop zone, routes them to raw or rejected zones, reads
+validated raw data into Spark, cleans and standardizes the data, aggregates to the
 `(timestamp, grid_id)` grain, enriches with GeoJSON geometry, and writes
 the result as Parquet and CSV.
 
 ---
 
-## Expected Inputs
+## Expected Inputs & Data Zones
 
-### 1. Telecom Activity CSVs
+### 1. Data Zone Architecture
+
+| Zone / Layer      | Location                                              | Description / Format                     |
+|-------------------|-------------------------------------------------------|------------------------------------------|
+| **Landing Zone**  | `--landing` (default: `D:\NOPIS\data\landing`)       | Incoming daily CSV drop zone             |
+| **Raw Zone**      | `--raw` (default: `D:\NOPIS\data\raw`)               | Validated immutable CSV storage          |
+| **Rejected Zone** | `--rejected` (default: `D:\NOPIS\data\rejected`)     | Quarantined invalid CSV files            |
+| **Ingestion Logs**| `--logs` (default: `D:\NOPIS\logs`)                   | Audit log (`ingestion_log.csv`)          |
+
+### 2. Telecom Activity CSVs
 
 | Property       | Value                                        |
 |----------------|----------------------------------------------|
-| **Location**   | `--input` directory (default: `D:\NOPIS\data`) |
 | **Pattern**    | `sms-call-internet-mi-*.csv`                 |
 | **Format**     | CSV with header row                          |
 | **Encoding**   | UTF-8                                        |
-| **Min files**  | 1 (pipeline fails if zero files match)       |
+| **Min files**  | 1 (pipeline fails if zero raw files match)   |
 
 **Required columns** (raw names):
 
@@ -34,7 +43,7 @@ the result as Parquet and CSV.
 | `callout`     | Double    | Yes      |
 | `internet`    | Double    | Yes      |
 
-### 2. GeoJSON Reference File
+### 3. GeoJSON Reference File
 
 | Property       | Value                                               |
 |----------------|-----------------------------------------------------|
@@ -79,16 +88,17 @@ Same data coalesced into a single CSV file for quick inspection.
 ## Pipeline Stages
 
 ```
-read_raw() → clean() → aggregate() → enrich() → write_outputs()
+process_landing() → read_raw() → clean() → aggregate() → enrich() → write_outputs()
 ```
 
-| Stage          | Module            | Key Operation                          |
-|----------------|-------------------|----------------------------------------|
-| **Ingestion**  | `ingestion.py`    | Read CSVs with manual schema           |
-| **Cleaning**   | `cleaning.py`     | Rename, quarantine, null→zero, derive  |
-| **Aggregation**| `aggregation.py`  | Collapse country codes, compute KPIs   |
-| **Enrichment** | `enrichment.py`   | Broadcast-join with GeoJSON            |
-| **Writing**    | `writer.py`       | Parquet + CSV output                   |
+| Stage                 | Module                 | Key Operation                          |
+|-----------------------|------------------------|----------------------------------------|
+| **Landing Ingestion** | `landing_ingestion.py` | Detect, validate schema/quality, route |
+| **Raw Ingestion**     | `ingestion.py`         | Read raw CSVs from raw/ with schema    |
+| **Cleaning**          | `cleaning.py`          | Rename, quarantine, null→zero, derive  |
+| **Aggregation**       | `aggregation.py`       | Collapse country codes, compute KPIs   |
+| **Enrichment**        | `enrichment.py`        | Broadcast-join with GeoJSON            |
+| **Writing**           | `writer.py`            | Parquet + CSV output                   |
 
 ---
 
@@ -96,7 +106,7 @@ read_raw() → clean() → aggregate() → enrich() → write_outputs()
 
 | Condition                          | Behavior                               |
 |------------------------------------|----------------------------------------|
-| No CSV files match glob pattern    | `FileNotFoundError` — exit code 1      |
+| No CSV files match in raw folder   | `FileNotFoundError` — exit code 1      |
 | Null `grid_id` or `timestamp`      | Row quarantined (not in output)        |
 | Negative activity values           | Row quarantined (not in output)        |
 | Duplicate `(grid_id, timestamp)`   | `ValueError` — exit code 1            |
@@ -109,32 +119,35 @@ read_raw() → clean() → aggregate() → enrich() → write_outputs()
 
 Every run logs the following to stdout:
 
-| Metric             | When Logged             |
-|--------------------|-------------------------|
-| Start time (UTC)   | Pipeline start          |
-| Input file count   | After ingestion         |
-| Input row count    | After ingestion         |
-| Null counts/column | During cleaning         |
-| Rejected row count | After cleaning          |
-| Rows after agg     | After aggregation       |
-| Enrichment coverage| After enrichment        |
-| Output row count   | After writing           |
-| End time (UTC)     | Pipeline end            |
-| Elapsed seconds    | Pipeline end            |
-| Final status       | Pipeline end (SUCCESS/FAILED) |
+| Metric               | When Logged             |
+|----------------------|-------------------------|
+| Start time (UTC)     | Pipeline start          |
+| Landing files count  | After landing ingestion |
+| Raw input row count  | After ingestion         |
+| Null counts/column   | During cleaning         |
+| Rejected row count   | After cleaning          |
+| Rows after agg       | After aggregation       |
+| Enrichment coverage  | After enrichment        |
+| Output row count     | After writing           |
+| End time (UTC)       | Pipeline end            |
+| Elapsed seconds      | Pipeline end            |
+| Final status         | Pipeline end (SUCCESS/FAILED) |
 
 ---
 
 ## Running the Pipeline
 
 ```bash
-# Default training run
+# Default run
 python -m spark.telecom_pipeline
 
 # Custom paths
 python -m spark.telecom_pipeline \
-    --input  D:\NOPIS\data \
-    --output D:\NOPIS\spark\output \
+    --landing   D:\NOPIS\data\landing \
+    --raw       D:\NOPIS\data\raw \
+    --rejected  D:\NOPIS\data\rejected \
+    --logs      D:\NOPIS\logs \
+    --output    D:\NOPIS\spark\output \
     --reference D:\NOPIS\data\milano-grid.geojson
 
 # Using a config file
@@ -145,8 +158,12 @@ python -m spark.telecom_pipeline --config pipeline_config.json
 
 ```json
 {
-    "input":     "D:\\NOPIS\\data",
+    "landing":   "D:\\NOPIS\\data\\landing",
+    "raw":       "D:\\NOPIS\\data\\raw",
+    "rejected":  "D:\\NOPIS\\data\\rejected",
+    "logs":      "D:\\NOPIS\\logs",
     "output":    "D:\\NOPIS\\spark\\output",
     "reference": "D:\\NOPIS\\data\\milano-grid.geojson"
 }
 ```
+

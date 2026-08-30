@@ -1,0 +1,95 @@
+93. Classify: daily usage summary, hypothetical live activity events, billing report, hotspot alerts, executive
+dashboard refresh, and model training and scoring.
+94. For each, document the source, arrival pattern, required latency, and the batch-or-streaming decision.
+
+| Workload                    | Source                        | Arrival pattern                                   | Required latency                          | Batch / Streaming                  | Why                                            |
+| --------------------------- | ----------------------------- | ------------------------------------------------- | ----------------------------------------- | ---------------------------------- | ---------------------------------------------- |
+| Daily usage summary         | Daily telecom CSV             | Once per day                                      | e.g. 1–4 hours                            | Batch                              | No need for second-by-second results           |
+| Live activity events        | Network events                | Continuous                                        | e.g. seconds/minutes                      | Streaming                          | Results need to reflect activity quickly       |
+| Billing report              | Usage/billing data            | Periodic                                          | e.g. hours/day                            | Batch                              | Billing doesn't need millisecond processing    |
+| Hotspot alerts              | Network activity              | Potentially continuous                            | e.g. <5 minutes                           | Streaming                          | Operations may need rapid alerts               |
+| Executive dashboard refresh | Analytics data                | Periodic                                          | e.g. 15–60 minutes                        | Batch                              | Executives don't need second-by-second updates |
+| Model training and scoring  | Historical data / live events | Training periodic; scoring potentially continuous | Training: hours; scoring: seconds/minutes | Batch training / Streaming scoring | Different latency requirements                 |
+
+
+95. Identify where Kafka could conceptually enter the architecture, without changing this training dataset
+Kafka could conceptually sit between live network-event producers and a streaming-processing layer. 
+It would provide the event ingestion and distribution layer for workloads requiring low latency, such as real-time hotspot alerts or real-time model scoring. 
+Our current daily CSV pipeline remains batch-based and unchanged. 
+The Milan GeoJSON remains static reference data and does not pass through Kafka.
+
+                         NOPIS NETWORK INTELLIGENCE
+                                  │
+                 ┌────────────────┴─────────────────┐
+                 │                                  │
+          BATCH PATH                         STREAMING PATH
+                 │                         (OPTIONAL / FUTURE)
+                 │                                  │
+        Daily CSV files                    Live network events
+                 │                                  │
+                 ▼                                  ▼
+             Landing                             Kafka
+                 │                                  │
+                 ▼                                  ▼
+               Raw                         Stream Processing
+                 │                                  │
+                 ▼                            ┌─────┴─────┐
+              Spark                           │           │
+                 │                         Alerts     ML Scoring
+                 ▼
+             Processed
+                 │
+                 ▼
+             Analytics
+                 │
+                 ▼
+              FastAPI
+                 │
+          ┌──────┴──────┐
+          ▼             ▼
+        React         Claude
+
+
+      Static reference:
+      milano-grid.geojson
+              ↓
+          Reference
+
+
+96. Discuss why these files are processed as batch even though real network activity is continuous.
+The network activity itself is continuous, but our training data arrives as daily CSV files containing hourly observations.
+Therefore, batch processing is appropriate because Spark processes each file after it arrives.
+We would consider streaming only if the source provided continuous events and the business required low-latency results.
+
+97. Map batch to model training, and streaming to potential real-time scoring.
+Model training is a batch workload because it uses accumulated historical data and does not require second-by-second processing. 
+In a future production architecture, streaming could be used for real-time model scoring when live network events arrive and predictions are required within seconds or minutes. 
+Our current dataset remains batch-based.
+
+                HISTORICAL DATA
+                       ↓
+                  Batch pipeline
+                       ↓
+                  Model Training
+                       ↓
+                 Trained ML Model
+                       │
+                       │
+              ┌────────┴─────────┐
+              │                  │
+       Batch scoring       Real-time scoring
+              │                  │
+              ↓                  ↓
+       Historical data       Live events
+                                 ↓
+                               Kafka
+                                 ↓
+                         Stream processing
+                                 ↓
+                            ML prediction
+
+
+98. Present one decision where batch is the better engineering choice, and defend it.
+I would choose batch for an executive dashboard refresh when the dashboard only needs to be updated every 30–60 minutes. 
+Streaming would introduce Kafka, stream processing, monitoring and additional operational complexity without providing significant business value. 
+Therefore, batch is the better engineering choice because it satisfies the latency requirement at lower cost and complexity.

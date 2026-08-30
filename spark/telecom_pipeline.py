@@ -1,16 +1,30 @@
 """
 telecom_pipeline.py — Unified ETL pipeline for NOPIS telecom data.
 
-Combines the ingestion (SP1), cleaning (SP2), aggregation (SP3),
-and geospatial enrichment (SP4) stages into a single production-style
-job with configurable paths, comprehensive logging, and clean failure
-handling.
+Combines the landing ingestion (DE2), raw ingestion (SP1), cleaning (SP2),
+aggregation (SP3), and geospatial enrichment (SP4) stages into a single
+production-style job with configurable paths, comprehensive logging, and clean
+failure handling.
+
+Pipeline Stages
+---------------
+    1. Landing Ingestion: Validate files in landing/ and route to raw/ or rejected/
+    2. Spark Session: Initialize Spark with local winutils/Hadoop config
+    3. Ingestion: Read validated raw CSVs from data/raw/
+    4. Cleaning: Standardize, quarantine bad rows, handle nulls
+    5. Aggregation: Collapse country codes, compute KPIs at (timestamp, grid_id) grain
+    6. Enrichment: Broadcast-join with milano-grid.geojson
+    7. Persistence: Persist Parquet and CSV outputs
 
 Usage
 -----
     python -m spark.telecom_pipeline \
-        --input  D:\\NOPIS\\data \
-        --output D:\\NOPIS\\spark\\output \
+        --landing   D:\\NOPIS\\data\\landing \
+        --raw       D:\\NOPIS\\data\\raw \
+        --rejected  D:\\NOPIS\\data\\rejected \
+        --logs      D:\\NOPIS\\logs \
+        --processed D:\\NOPIS\\data\\processed \
+        --analytics D:\\NOPIS\\data\\analytics \
         --reference D:\\NOPIS\\data\\milano-grid.geojson
 
 All paths can also be supplied via a JSON config file::
@@ -21,6 +35,7 @@ All paths can also be supplied via a JSON config file::
 import argparse
 import json
 import logging
+from pathlib import Path
 import sys
 import time
 import traceback
@@ -28,6 +43,7 @@ from datetime import datetime, timezone
 
 # ── Pipeline stage imports ────────────────────────────────────────
 from spark.spark_session import create_spark_session
+from spark.landing_ingestion import process_landing
 from spark.ingestion import read_raw
 from spark.cleaning import clean
 from spark.aggregation import aggregate
@@ -36,8 +52,12 @@ from spark.writer import write_outputs
 
 # ── Default paths (training run) ────────────────────────────────
 _DEFAULTS = {
-    "input":     r"D:\NOPIS\data",
-    "output":    r"D:\NOPIS\spark\output",
+    "landing":   r"D:\NOPIS\data\landing",
+    "raw":       r"D:\NOPIS\data\raw",
+    "rejected":  r"D:\NOPIS\data\rejected",
+    "logs":      r"D:\NOPIS\logs",
+    "processed": r"D:\NOPIS\data\processed",
+    "analytics": r"D:\NOPIS\data\analytics",
     "reference": r"D:\NOPIS\data\milano-grid.geojson",
 }
 
@@ -62,19 +82,49 @@ def _setup_logging():
 
 def _parse_args():
     parser = argparse.ArgumentParser(
-        description="NOPIS Telecom ETL Pipeline (SP7)",
+        description="NOPIS Telecom ETL Pipeline (SP7 / DE2)",
+    )
+
+    parser.add_argument(
+        "--landing",
+        default=_DEFAULTS["landing"],
+        help="Directory containing landing zone CSV files (data/landing).",
+    )
+
+    parser.add_argument(
+        "--raw",
+        default=_DEFAULTS["raw"],
+        help="Directory containing validated raw CSV files for Spark ingestion (data/raw).",
+    )
+
+    parser.add_argument(
+        "--rejected",
+        default=_DEFAULTS["rejected"],
+        help="Directory for quarantined/rejected CSV files (data/rejected).",
+    )
+
+    parser.add_argument(
+        "--logs",
+        default=_DEFAULTS["logs"],
+        help="Directory for ingestion audit logs (logs).",
     )
 
     parser.add_argument(
         "--input",
-        default=_DEFAULTS["input"],
-        help="Directory containing sms-call-internet-mi-*.csv files.",
+        default=None,
+        help="Base data folder or raw input folder (legacy compatibility).",
     )
 
     parser.add_argument(
-        "--output",
-        default=_DEFAULTS["output"],
-        help="Base output directory for Parquet and CSV.",
+        "--processed",
+        default=_DEFAULTS["processed"],
+        help="Base directory for the processed data zone (data/processed).",
+    )
+
+    parser.add_argument(
+        "--analytics",
+        default=_DEFAULTS["analytics"],
+        help="Base directory for the analytics data zone (data/analytics).",
     )
 
     parser.add_argument(
@@ -98,19 +148,43 @@ def _resolve_paths(args):
     JSON config file.
     """
     paths = {
-        "input":     args.input,
-        "output":    args.output,
+        "landing":   args.landing,
+        "raw":       args.raw,
+        "rejected":  args.rejected,
+        "logs":      args.logs,
+        "processed": args.processed,
+        "analytics": args.analytics,
         "reference": args.reference,
     }
+
+    # Backward compatibility: if --input is explicitly passed
+    if args.input:
+        input_p = Path(args.input)
+        if (input_p / "raw").exists() or (input_p / "landing").exists():
+            paths["landing"] = str(input_p / "landing")
+            paths["raw"] = str(input_p / "raw")
+            paths["rejected"] = str(input_p / "rejected")
+        else:
+            paths["raw"] = str(input_p)
 
     if args.config:
         with open(args.config, "r", encoding="utf-8") as f:
             config = json.load(f)
 
         # Config keys override CLI defaults
-        for key in ("input", "output", "reference"):
+        for key in ("landing", "raw", "rejected", "logs",
+                    "processed", "analytics", "reference"):
             if key in config:
                 paths[key] = config[key]
+
+        if "input" in config and "raw" not in config:
+            input_p = Path(config["input"])
+            if (input_p / "raw").exists() or (input_p / "landing").exists():
+                paths["landing"] = str(input_p / "landing")
+                paths["raw"] = str(input_p / "raw")
+                paths["rejected"] = str(input_p / "rejected")
+            else:
+                paths["raw"] = str(input_p)
 
     return paths
 
@@ -133,46 +207,74 @@ def main():
     logger.info("=" * 70)
     logger.info("NOPIS TELECOM PIPELINE — START")
     logger.info("=" * 70)
-    logger.info("Start time : %s", start_dt)
-    logger.info("Input path : %s", paths["input"])
-    logger.info("Output path: %s", paths["output"])
-    logger.info("Reference  : %s", paths["reference"])
+    logger.info("Start time      : %s", start_dt)
+    logger.info("Landing path    : %s", paths["landing"])
+    logger.info("Raw path        : %s", paths["raw"])
+    logger.info("Rejected path   : %s", paths["rejected"])
+    logger.info("Logs path       : %s", paths["logs"])
+    logger.info("Processed path  : %s", paths["processed"])
+    logger.info("Analytics path  : %s", paths["analytics"])
+    logger.info("Reference       : %s", paths["reference"])
     logger.info("=" * 70)
 
     spark = None
     status = "FAILED"
+    landing_summary = {"detected": 0, "valid": 0, "rejected": 0}
+    input_rows = 0
+    rejected_count = 0
+    nulls_handled = {}
+    output_rows = 0
 
     try:
-        # ── 1. Create Spark session ──────────────────────────────
-        logger.info("Stage 1/5 — Creating Spark session")
+        # ── 1. Landing Ingestion (Landing -> Raw / Rejected) ───────
+        logger.info("Stage 1/6 — Landing Ingestion (process_landing)")
+        landing_summary = process_landing(
+            landing_path=paths["landing"],
+            raw_path=paths["raw"],
+            rejected_path=paths["rejected"],
+            logs_path=paths["logs"],
+        )
+        logger.info(
+            "Landing Ingestion complete: %d detected, %d valid, %d rejected",
+            landing_summary["detected"],
+            landing_summary["valid"],
+            landing_summary["rejected"],
+        )
+
+        # ── 2. Create Spark session ──────────────────────────────
+        logger.info("Stage 2/6 — Creating Spark session")
         spark = create_spark_session(
             app_name="NOPIS_Telecom_Pipeline_SP7",
         )
 
-        # ── 2. Ingest raw data ───────────────────────────────────
-        logger.info("Stage 2/5 — Ingestion (read_raw)")
-        raw_df = read_raw(spark, paths["input"])
+        # ── 3. Ingest raw data from raw folder ───────────────────
+        logger.info("Stage 3/6 — Ingestion (read_raw from %s)", paths["raw"])
+        raw_df = read_raw(spark, paths["raw"])
         input_rows = raw_df.count()
 
-        # ── 3. Clean and standardize ─────────────────────────────
-        logger.info("Stage 3/5 — Cleaning (clean)")
+        # ── 4. Clean and standardize ─────────────────────────────
+        logger.info("Stage 4/6 — Cleaning (clean)")
         curated_df, rejected_count, nulls_handled = clean(
             spark, raw_df
         )
 
-        # ── 4. Aggregate ────────────────────────────────────────
-        logger.info("Stage 4/5 — Aggregation (aggregate)")
+        # ── 5. Aggregate ────────────────────────────────────────
+        logger.info("Stage 5/6 — Aggregation (aggregate)")
         hourly_grid_summary = aggregate(spark, curated_df)
 
-        # ── 5a. Enrich with geospatial data ─────────────────────
-        logger.info("Stage 5a/5 — Enrichment (enrich)")
+        # ── 6a. Enrich with geospatial data ─────────────────────
+        logger.info("Stage 6a/6 — Enrichment (enrich)")
         enriched_df = enrich(
             spark, hourly_grid_summary, paths["reference"]
         )
 
-        # ── 5b. Write outputs ───────────────────────────────────
-        logger.info("Stage 5b/5 — Writing outputs")
-        output_rows = write_outputs(enriched_df, paths["output"])
+        # ── 6b. Write outputs ───────────────────────────────────
+        logger.info("Stage 6b/6 — Writing outputs")
+        output_rows = write_outputs(
+            enriched_df,
+            processed_path=paths["processed"],
+            analytics_path=paths["analytics"],
+        )
 
         status = "SUCCESS"
 
@@ -194,16 +296,21 @@ def main():
         logger.info("=" * 70)
         logger.info("NOPIS TELECOM PIPELINE — SUMMARY")
         logger.info("=" * 70)
-        logger.info("Final status   : %s", status)
-        logger.info("Start time     : %s", start_dt)
-        logger.info("End time       : %s", end_dt)
-        logger.info("Elapsed        : %.1f seconds", elapsed)
+        logger.info("Final status    : %s", status)
+        logger.info("Start time      : %s", start_dt)
+        logger.info("End time        : %s", end_dt)
+        logger.info("Elapsed         : %.1f seconds", elapsed)
 
         if status == "SUCCESS":
-            logger.info("Input rows     : %d", input_rows)
-            logger.info("Rejected rows  : %d", rejected_count)
-            logger.info("Nulls handled  : %s", nulls_handled)
-            logger.info("Output rows    : %d", output_rows)
+            logger.info("Landing detected: %d", landing_summary["detected"])
+            logger.info("Landing valid   : %d", landing_summary["valid"])
+            logger.info("Landing rejected: %d", landing_summary["rejected"])
+            logger.info("Raw input rows  : %d", input_rows)
+            logger.info("Rejected rows   : %d", rejected_count)
+            logger.info("Nulls handled   : %s", nulls_handled)
+            logger.info("Output rows     : %d", output_rows)
+            logger.info("Processed path  : %s", paths["processed"])
+            logger.info("Analytics path  : %s", paths["analytics"])
 
         logger.info("=" * 70)
 
@@ -215,3 +322,4 @@ def main():
 # ═════════════════════════════════════════════════════════════════
 if __name__ == "__main__":
     main()
+

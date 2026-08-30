@@ -1,0 +1,170 @@
+# DE1 — Telecom Data Architecture Design Document
+
+75. Draw the architecture from the daily activity CSV source plus the static milano-grid.geojson reference
+through to the React and Claude consumers.
+
+```mermaid
+flowchart TD
+    %% Source & Ingestion Flow
+    subgraph Sources ["1. Ingestion Sources"]
+        DailyCSV["Daily Activity CSVs\n(sms-call-internet-mi-*.csv)"]
+        GeoRef["milano-grid.geojson\n(Static Reference Data)"]
+    end
+
+    %% Storage Zones & Quality Gates
+    subgraph IngestionZones ["2. Data Lake / Storage Layers"]
+        LandingZone["Landing Zone\n(/data/landing/)\nRaw arrivals"]
+        Gate1{"Gate 1: Landing Quality Gate\n(Schema, Non-empty, File integrity)"}
+        RawZone["Raw Ingestion Zone\n(/data/raw/YYYY/MM/DD/)\nImmutable Archive"]
+        RefZone["Reference Zone\n(/data/reference/milano-grid.geojson)\nStatic Polygons (10k Cells)"]
+        ProcessedZone["Processed Zone\n(/data/processed/enriched_hourly_grid/)\nPartitioned Parquet (Snappy)"]
+    end
+
+    %% Processing & Orchestration
+    subgraph Processing ["3. Compute & Orchestration"]
+        Airflow["Airflow Orchestrator\n(DAG Schedules, Sensors, Triggers)"]
+        SparkJob["PySpark Batch ETL Engine\n(Clean, Deduplicate, Aggregate, Broadcast Join)"]
+        AuditDB[("Pipeline Health & Audit Store\n(Runs, Row Counts, Latency, Status)")]
+    end
+
+    %% Warehouse & Quality Gate 2
+    subgraph Warehouse ["4. Analytics Warehouse"]
+        Gate2{"Gate 2: Analytics Quality Gate\n(Null checks, Grain uniqueness, KPI range)"}
+        AnalyticsWH[("Analytics Warehouse (SQL / DuckDB / Postgres)\n- hourly_grid_summary\n- daily_grid_summary\n- hotspots\n- alert_and_risk")]
+    end
+
+    %% Serving & Consumption
+    subgraph Serving ["5. Serving & Application Layer"]
+        FastAPI["FastAPI Backend\n(REST Endpoints, Analytics API, Health API6)"]
+        MLService["ML Predictive Service\n(Anomaly Detection & Forecasting)"]
+        ReactApp["React Operator Dashboard\n(Maps, Grid KPIs, Alerts, Visuals)"]
+        ClaudeAgent["Claude Operations Assistant\n(Root Cause Analysis, Natural Language Queries)"]
+    end
+
+    %% Data Connections
+    DailyCSV --> LandingZone
+    LandingZone --> Gate1
+    Gate1 -- Pass --> RawZone
+    Gate1 -- Fail --> Quarantine["Quarantine / Alerts"]
+
+    Airflow -.->|Orchestrates| Gate1
+    Airflow -.->|Triggers| SparkJob
+    Airflow -.->|Logs health metrics| AuditDB
+
+    RawZone --> SparkJob
+    GeoRef --> RefZone
+    RefZone --> SparkJob
+
+    SparkJob --> ProcessedZone
+    SparkJob -.->|Log metrics| AuditDB
+
+    ProcessedZone --> Gate2
+    Gate2 -- Pass --> AnalyticsWH
+    Gate2 -- Fail --> Quarantine
+
+    AnalyticsWH --> FastAPI
+    AuditDB -->|Exposes /health & /pipeline-status| FastAPI
+    AnalyticsWH --> MLService
+    MLService --> FastAPI
+
+    FastAPI --> ReactApp
+    FastAPI --> ClaudeAgent
+```
+
+76. Map the landing, raw, reference, processed and analytics layers to file formats and tools. Treat
+milano-grid.geojson as static reference data, not a daily ingestion file.
+
+| Layer         | Responsibility                                                                                                             | Storage Path / Format                                                           | Primary Tool                    | Data Contract / Schema                                                                                              |
+| ------------- | -------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- | ------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| **Landing**   | Temporary arrival drop zone for raw incoming files before ingestion validation.                                            | `/data/landing/*.csv`<br>CSV, UTF-8                                             | Ingestion Sensor / File Watcher | Raw CSV columns: `datetime, CellID, countrycode, smsin, smsout, callin, callout, internet`                          |
+| **Raw**       | Immutable, historical archive of validated raw source files partitioned by arrival date.                                   | `/data/raw/YYYY/MM/DD/*.csv.gz`<br>Gzipped CSV                                  | Airflow / Storage Mover         | Exactly matches source CSV format without any transformation.                                                       |
+| **Reference** | Static dimension data holding spatial definitions and boundaries for Milan grid cells.                                     | `/data/reference/milano-grid.geojson`<br>GeoJSON FeatureCollection              | Static Reference Loader         | GeoJSON polygons with `cellId` property matching `grid_id`. Updated only on administrative grid changes.            |
+| **Processed** | Cleaned, aggregated `(timestamp, grid_id)` records enriched with geospatial metadata.                                      | `/data/processed/enriched_hourly_grid/`<br>Parquet, Snappy, partitioned by date | Apache Spark (PySpark)          | Clean column names, derived KPIs (`total_activity`, `internet_share`), nulls imputed to 0, geometry attached.       |
+| **Analytics** | Curated dimensional models, aggregated summaries, hotspot rankings, and risk flags optimized for low-latency SQL querying. | Analytics Data Warehouse / DuckDB / PostgreSQL                                  | SQL Engine / dbt                | Star/Snowflake models: `hourly_grid_summary`, `daily_grid_summary`, `hotspots`, `alert_and_risk`, `pipeline_health` |
+
+
+77. Identify the quality gates that must pass before raw acceptance and before analytics publication.
+
+### Gate 1: Landing → Raw Ingestion Acceptance
+* **Trigger**: On new CSV arrival in Landing.
+* **Checks**:
+  1. **File Integrity**: File is non-empty (>0 bytes), valid UTF-8, and non-corrupt.
+  2. **Schema Conformance**: Header contains all 8 required raw columns with valid basic data types.
+  3. **Temporal Validity**: Timestamps fall within expected date ranges (no futuristic dates).
+  4. **Cell Range Validity**: `CellID` values are valid integers within the Milan grid envelope (1 to 10,000).
+* **Failure Handling**: Reject file, isolate in `/data/quarantine/landing/`, log failure to Audit DB, send ingestion alert.
+
+### Gate 2: Processed → Analytics Publication Gate
+* **Trigger**: After Spark batch job execution before publishing to the analytics warehouse.
+* **Checks**:
+  1. **Primary Key Uniqueness**: `(timestamp, grid_id)` is unique (zero duplicate records).
+  2. **Completeness & Nullability**: Zero nulls in non-nullable dimensions (`timestamp`, `grid_id`, `date`, `hour`).
+  3. **Metric Sanity**: All activity metrics (`sms_in`, `sms_out`, `call_in`, `call_out`, `internet_activity`) $\ge 0$.
+  4. **Volume Anomaly Check**: Row count is within $\pm 20\%$ of expected daily cell active hours.
+  5. **Referential Integrity**: 100% of `grid_id` values map successfully to reference grid geometries.
+* **Failure Handling**: Block table swap/publish, preserve prior clean snapshot, log error in Pipeline Health store, alert on-call engineer.
+
+---
+78. Define the analytics outputs: hourly_grid_summary, daily_grid_summary, hotspots, and the alert and
+risk tables.
+
+### 1. `hourly_grid_summary`
+* **Grain**: One row per `(timestamp, grid_id)` (Hourly per grid cell).
+* **Columns**: `timestamp`, `date`, `hour`, `grid_id`, `sms_in`, `sms_out`, `call_in`, `call_out`, `internet_activity`, `total_activity`, `internet_share`, `geometry`.
+* **Purpose**: Serves fine-grained map visualizations, hourly trend exploration, and input features for ML.
+
+### 2. `daily_grid_summary`
+* **Grain**: One row per `(date, grid_id)`.
+* **Columns**: `date`, `grid_id`, `daily_total_activity`, `peak_hour`, `peak_hour_activity`, `avg_hourly_activity`, `total_sms`, `total_calls`, `total_internet`, `dominant_service`.
+* **Purpose**: Macro-level daily reports, spatial heatmaps, and day-over-day network trend analysis.
+
+### 3. `hotspots`
+* **Grain**: One row per `(date, rank, grid_id)`.
+* **Columns**: `date`, `rank`, `grid_id`, `total_activity`, `activity_zscore`, `is_persistent_hotspot`, `geometry`.
+* **Purpose**: Fast lookup of top-N overloaded or highly utilized grid cells for operational prioritization.
+
+### 4. `alert_and_risk`
+* **Grain**: One row per `(alert_id, timestamp, grid_id)`.
+* **Columns**: `alert_id`, `timestamp`, `grid_id`, `alert_type` (e.g., Surge, Sudden Drop, Zero Activity), `severity` (INFO, WARNING, CRITICAL), `metric_name`, `observed_value`, `threshold_value`, `status`.
+* **Purpose**: Powers real-time incident dashboards and provides historical incident context for root-cause queries.
+
+### 5. `pipeline_health` (Dedicated for API6)
+* **Grain**: One row per `(pipeline_run_id)`.
+* **Columns**: `run_id`, `pipeline_name`, `start_time`, `end_time`, `duration_seconds`, `files_processed`, `raw_rows_count`, `quarantined_rows_count`, `published_rows_count`, `status` (`SUCCESS`, `FAILED`), `error_message`.
+* **Purpose**: Direct backend data source for API6 `/health` and `/pipeline/status` endpoints.
+
+---
+79. Define the responsibilities of Spark, SQL, Airflow, FastAPI, React, ML and Claude — one sentence each,
+with no overlap.
+
+* **Spark**: Executes distributed batch transformations, deduplication, country-code aggregations, and GeoJSON enrichment on raw activity data.
+* **SQL**: Transforms processed Parquet tables into aggregated, indexed dimensional models and serves analytical queries in the warehouse.
+* **Airflow**: Schedules, sequences, and monitors data pipeline DAGs while managing dependency triggers and failure alerts.
+* **FastAPI**: Exposes secure, high-performance RESTful API endpoints for analytics data, ML inferences, and pipeline health telemetry.
+* **React**: Renders an interactive web interface with spatial maps, time-series charts, and operational alert dashboards for telecom engineers.
+* **ML**: Computes anomaly scores and forecasts future grid activity levels based on historical aggregated time-series data.
+* **Claude**: Provides conversational root-cause analysis and natural language operational insights by querying API and warehouse evidence.
+
+*(Note: Zero overlapping responsibilities across components.)*
+
+---
+80. Produce a one-page design document with explicit assumptions and non-goals.
+
+### System Design Summary
+The Telecom Network Intelligence Architecture adopts a **medallion-inspired batch processing pattern** orchestrated by Airflow. Raw daily CSV files land asynchronously, pass Landing Quality Gate 1, and archive immutably in Raw storage. Spark processes raw records alongside static reference polygons (`milano-grid.geojson`), writing columnar Parquet into the Processed layer. SQL models publish validated dimensional marts to the Analytics Warehouse after passing Gate 2. Serving services (FastAPI) deliver curated metrics and health diagnostics to React dashboards and the Claude Assistant.
+
+### Key Assumptions
+1. **Batch Arrival Cadence**: Telecom activity CSVs arrive once per day in discrete daily batch files.
+2. **Static Spatial Grid**: Milan grid geometries (`milano-grid.geojson`) remain constant over time and do not need daily re-ingestion.
+3. **Activity Metric Definitions**: Metrics represent normalized dimensionless activity volumes (call/sms/internet activity counts), not packet dumps.
+4. **Idempotent Reprocessing**: Reprocessing any historical date overwrites that date's partition cleanly without side effects or duplicates.
+
+### Non-Goals (Boundaries & Constraints)
+* **No Real-Time Streaming Ingestion**: The system is strictly a daily/hourly batch pipeline; real-time sub-second stream processing (e.g., Kafka/Flink) is out of scope.
+* **We do not have capacity, throughput, or utilization data**: The pipeline monitors aggregate user activity counts, not radio tower hardware capacity (bandwidth, RF power, hardware utilization, or link throughput).
+* **No Direct Raw Queries by End-Users**: UI and AI consumers never read directly from Landing, Raw, or Spark staging paths; all access is mediated by FastAPI and the Analytics Warehouse.
+* **No Manual Pipeline File Moves**: Moving files between Landing, Raw, and Processed zones is fully automated via orchestration jobs.
+
+### Pipeline Health & Observability (API6 Link)
+* Pipeline operational metadata is persisted directly to the `pipeline_health` audit table upon every run completion or failure.
+* API6 connects directly to this table to serve pipeline uptime, data freshness (SLA tracking), quarantine rates, and run history to operators and automated alerts.

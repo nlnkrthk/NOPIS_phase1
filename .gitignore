@@ -19,3 +19,7 @@ tmp/
 NOPIStmpspark_temp/
 
 spark/output/
+
+logs/*
+
+Phase_2/winutils/
