@@ -1,0 +1,32 @@
+import sys
+from pathlib import Path
+
+# Ensure project root is in sys.path so it works when executed from any directory
+root_dir = str(Path(__file__).resolve().parent.parent)
+if root_dir not in sys.path:
+    sys.path.insert(0, root_dir)
+
+from fastapi import FastAPI
+try:
+    from Phase_4.routers.network import router as network_router
+except ModuleNotFoundError:
+    from routers.network import router as network_router
+
+app = FastAPI(
+    title="NOPIS Phase 4 — Network Operations Predictive Intelligence System API",
+    description="REST API for querying analytics metrics and network summaries from the telecom warehouse.",
+    version="1.0.0"
+)
+
+app.include_router(network_router)
+
+@app.get("/")
+def root():
+    return {
+        "message": "NOPIS Network Summary API is running.",
+        "docs": "/docs"
+    }
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run("main:app", host="127.0.0.1", port=8000, reload=True, app_dir=str(Path(__file__).resolve().parent))
