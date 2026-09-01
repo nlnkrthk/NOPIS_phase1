@@ -23,3 +23,8 @@ spark/output/
 logs/*
 
 Phase_2/winutils/
+
+Phase_4/tests/
+
+Phase_5/node_modules/*
+

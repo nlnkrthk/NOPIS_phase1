@@ -1,4 +1,4 @@
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 from datetime import datetime, date
 from typing import List, Optional
 
@@ -80,4 +80,31 @@ class GridFeaturesResponse(BaseModel):
     data_quality_status: str
     freshness_hours: float
     is_fresh: bool
+
+# 150. Create POST /network/predict-risk with a Pydantic request model.
+# 154. Keep the endpoint contract unchanged when replacing stub with ML model.
+class PredictRiskRequest(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    grid_id: int = Field(..., ge=1, le=10000, description="Grid identifier (valid range: 1–10000)")
+    as_of: Optional[datetime] = Field(None, description="Optional reporting reference timestamp")
+    avg_activity: Optional[float] = Field(None, ge=0.0, description="Optional feature: average activity")
+    activity_growth: Optional[float] = Field(None, description="Optional feature: activity growth rate")
+    active_hours: Optional[int] = Field(None, ge=0, le=24, description="Optional feature: active hours count")
+    peak_ratio: Optional[float] = Field(None, ge=0.0, description="Optional feature: peak activity ratio")
+    variability: Optional[float] = Field(None, ge=0.0, description="Optional feature: activity variability")
+    internet_share: Optional[float] = Field(None, ge=0.0, le=1.0, description="Optional feature: internet traffic share")
+
+# 151. Return a stub risk_score, risk_level, model_version and explanation_note stating that the implementation is currently a stub.
+class PredictRiskResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    grid_id: int
+    risk_score: float = Field(..., ge=0.0, le=1.0, description="Predicted operational risk probability score (0.0 - 1.0)")
+    risk_level: str = Field(..., description="Categorical risk classification (LOW, MEDIUM, HIGH, CRITICAL)")
+    model_version: str = Field(..., description="Identifier of the serving model version (stub marked clearly)")
+    prediction_timestamp: datetime = Field(..., description="Timestamp when prediction was evaluated")
+    explanation_note: str = Field(..., description="Human-readable explanation of risk assessment or stub status note")
+    is_stub: bool = Field(True, description="Boolean flag indicating whether response is from a stub implementation")
+
 

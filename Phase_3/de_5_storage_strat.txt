@@ -1,0 +1,90 @@
+99. Map the zones: landing = incoming daily CSVs; raw = immutable accepted CSVs; reference =
+milano-grid.geojson; processed = Parquet; analytics = warehouse tables and curated Parquet; logs/ =
+audit and run history.
+
+| Zone          | What goes here                           | Format               | Purpose                                  |
+| ------------- | ---------------------------------------- | -------------------- | ---------------------------------------- |
+| **Landing**   | Incoming daily CSV files                 | CSV                  | Temporary arrival area                   |
+| **Raw**       | Validated/accepted CSV files             | CSV                  | Preserve original data unchanged         |
+| **Rejected**  | Invalid CSV files                        | CSV                  | Keep files that failed validation        |
+| **Reference** | `milano-grid.geojson`                    | GeoJSON              | Static Milan grid reference              |
+| **Processed** | Cleaned + aggregated + enriched data     | Parquet              | Efficient Spark processing               |
+| **Analytics** | Curated datasets / warehouse tables      | Parquet / SQL tables | Data ready for querying and applications |
+| **Logs**      | Ingestion and pipeline audit information | CSV / JSON / text    | Track what happened during runs          |
+
+
+100. Define a date-partitioned processed directory structure, and a non-partitioned static location for the
+reference data.
+
+Why partition by date?
+Your data is time-based and arrives daily.
+data/
+└── processed/
+    └── enriched_hourly_grid/
+        ├── date=2013-11-01/
+        │   ├── part-00000.parquet
+        │   └── ...
+        │
+        ├── date=2013-11-02/
+        │   ├── part-00000.parquet
+        │   └── ...
+        │
+        └── date=2013-11-03/
+            └── ...
+
+
+101.Explain why raw is retained unchanged.
+
+RAW
+│
+├── What exactly did we receive?
+├── What did we accept?
+└── What did we use as the input to Spark?
+
+data/raw/
+    → accepted CSV files
+    → original format
+    → unchanged
+    → retained for audit/reprocessing
+
+
+102. Compare append and overwrite semantics for each layer.
+| Layer         | Recommended mode                   | Why                                                |
+| ------------- | ---------------------------------- | -------------------------------------------------- |
+| **Landing**   | Temporary / move                   | Files are moved out after validation               |
+| **Raw**       | **Append**                         | Historical accepted files must remain              |
+| **Rejected**  | **Append**                         | Keep rejected files for audit                      |
+| **Reference** | **Overwrite/replace when updated** | Static reference; new version replaces old version |
+| **Processed** | **Append by date**                 | New daily partitions should be added               |
+| **Analytics** | Depends on table                   | Curated summaries may be rebuilt or appended       |
+| **Logs**      | **Append**                         | Never erase previous audit/run history             |
+
+103. Define retention considerations for raw data and for logs.
+
+-retain raw data for a relatively long period because it can be needed for:
+Reprocessing with a new Spark logic
+Debugging incorrect processed results
+Auditing what was originally received
+Recovering from downstream failures
+Rebuilding processed/analytics data
+
+
+-Log retention:
+Keep logs long enough to troubleshoot and audit
+pipeline executions.
+Keep all logs for the lifetime of the project.
+
+
+104. Document the storage contract.
+| Zone          | Contents                                      | Format               | Write Semantics                                   | Partitioning      | Retention                  |
+| ------------- | --------------------------------------------- | -------------------- | ------------------------------------------------- | ----------------- | -------------------------- |
+| **Landing**   | Incoming daily telecom CSVs                   | CSV                  | Temporary; files are moved after validation       | None              | Until ingestion completes  |
+| **Raw**       | Accepted daily CSVs, unchanged                | CSV                  | Append                                            | None              | Project lifetime           |
+| **Rejected**  | Files failing validation                      | CSV                  | Append                                            | None              | Project lifetime           |
+| **Reference** | `milano-grid.geojson`                         | GeoJSON              | Replace only when reference is officially updated | **None**          | Current reference retained |
+| **Processed** | Cleaned, aggregated and enriched network data | Parquet              | Append by date                                    | `date=YYYY-MM-DD` | Project/business dependent |
+| **Analytics** | Curated datasets and warehouse outputs        | Parquet / SQL tables | Dataset-dependent                                 | Dataset-dependent | Business dependent         |
+| **Logs**      | Ingestion audit and pipeline run history      | CSV / JSON / text    | Append                                            | None              | Project lifetime           |
+
+
+

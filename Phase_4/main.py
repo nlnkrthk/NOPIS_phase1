@@ -7,6 +7,7 @@ if root_dir not in sys.path:
     sys.path.insert(0, root_dir)
 
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 try:
     from Phase_4.routers.network import router as network_router
 except ModuleNotFoundError:
@@ -16,6 +17,21 @@ app = FastAPI(
     title="NOPIS Phase 4 — Network Operations Predictive Intelligence System API",
     description="REST API for querying analytics metrics and network summaries from the telecom warehouse.",
     version="1.0.0"
+)
+
+# 162. Configure CORS on FastAPI.
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+        "*"
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 app.include_router(network_router)

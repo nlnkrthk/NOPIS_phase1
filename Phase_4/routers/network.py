@@ -13,12 +13,42 @@ from sqlalchemy.exc import SQLAlchemyError
 
 try:
     from Phase_4.database import SessionLocal
-    from Phase_4.schemas import NetworkSummaryResponse, GridActivityPoint, HotspotItem, AlertItem, GridFeaturesResponse
-    from Phase_4.services import get_network_summary, get_grid_activity, get_hotspots, get_alerts, get_grid_features
+    from Phase_4.schemas import (
+        NetworkSummaryResponse, 
+        GridActivityPoint, 
+        HotspotItem, 
+        AlertItem, 
+        GridFeaturesResponse,
+        PredictRiskRequest,
+        PredictRiskResponse
+    )
+    from Phase_4.services import (
+        get_network_summary, 
+        get_grid_activity, 
+        get_hotspots, 
+        get_alerts, 
+        get_grid_features,
+        predict_grid_risk
+    )
 except ModuleNotFoundError:
     from database import SessionLocal
-    from schemas import NetworkSummaryResponse, GridActivityPoint, HotspotItem, AlertItem, GridFeaturesResponse
-    from services import get_network_summary, get_grid_activity, get_hotspots, get_alerts, get_grid_features
+    from schemas import (
+        NetworkSummaryResponse, 
+        GridActivityPoint, 
+        HotspotItem, 
+        AlertItem, 
+        GridFeaturesResponse,
+        PredictRiskRequest,
+        PredictRiskResponse
+    )
+    from services import (
+        get_network_summary, 
+        get_grid_activity, 
+        get_hotspots, 
+        get_alerts, 
+        get_grid_features,
+        predict_grid_risk
+    )
 
 router = APIRouter(prefix="/network", tags=["Network"])
 
@@ -162,6 +192,41 @@ def grid_features(
                 detail=f"No stored ML features found for grid {grid_id}"
             )
         return features
+    except HTTPException:
+        raise
+    except SQLAlchemyError:
+        raise HTTPException(
+            status_code=500,
+            detail="Database unavailable"
+        )
+    except Exception:
+        raise HTTPException(
+            status_code=500,
+            detail="Internal server error"
+        )
+    finally:
+        db.close()
+
+# 150. Create POST /network/predict-risk with a Pydantic request model.
+# 151. Return a stub risk_score, risk_level, model_version and explanation_note stating that the implementation is currently a stub.
+# 152. Verify invalid inputs return meaningful validation errors.
+@router.post("/predict-risk", response_model=PredictRiskResponse)
+def predict_risk(request: PredictRiskRequest):
+    if request.grid_id < 1 or request.grid_id > 10000:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Grid {request.grid_id} not found. Valid grid IDs are in the range 1–10000."
+        )
+
+    db = SessionLocal()
+    try:
+        prediction = predict_grid_risk(db=db, request_data=request)
+        if prediction is None:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Grid {request.grid_id} not found in the reference grid registry."
+            )
+        return prediction
     except HTTPException:
         raise
     except SQLAlchemyError:

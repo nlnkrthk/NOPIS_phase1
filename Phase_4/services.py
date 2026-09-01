@@ -401,5 +401,57 @@ def get_grid_features(db: Session, grid_id: int) -> Optional[dict]:
         "is_fresh": is_fresh
     }
 
+# 150. Create POST /network/predict-risk with a Pydantic request model.
+# 151. Return a stub risk_score, risk_level, model_version and explanation_note stating that the implementation is currently a stub.
+# 153. After ML5, replace the stub with the trained model.
+# 154. Keep the endpoint contract unchanged when that happens.
+def predict_grid_risk(db: Session, request_data: Any) -> Optional[dict]:
+    grid_id = request_data.grid_id
+    if grid_id < 1 or grid_id > 10000:
+        return None
+
+    # Check grid existence in dim_grid
+    grid_exists = db.execute(text("SELECT 1 FROM dim_grid WHERE grid_id = :grid_id LIMIT 1"), {"grid_id": grid_id}).scalar()
+    if not grid_exists:
+        return None
+
+    # Determine activity level from stored features or fact table to generate a realistic stub score
+    feat_row = db.execute(text("SELECT avg_activity FROM grid_features WHERE grid_id = :grid_id LIMIT 1"), {"grid_id": grid_id}).mappings().first()
+    avg_act = float(feat_row["avg_activity"]) if feat_row else 0.0
+
+    # If avg_activity was explicitly overridden in the request payload
+    if request_data.avg_activity is not None:
+        avg_act = float(request_data.avg_activity)
+
+    # Heuristic stub scoring
+    if avg_act >= 2000:
+        risk_score = 0.85
+        risk_level = "CRITICAL"
+    elif avg_act >= 1000:
+        risk_score = 0.65
+        risk_level = "HIGH"
+    elif avg_act >= 400:
+        risk_score = 0.45
+        risk_level = "MEDIUM"
+    else:
+        risk_score = 0.15
+        risk_level = "LOW"
+
+    prediction_time = datetime.now(timezone.utc).replace(tzinfo=None)
+
+    return {
+        "grid_id": grid_id,
+        "risk_score": float(risk_score),
+        "risk_level": risk_level,
+        "model_version": "stub-v0.1.0",
+        "prediction_timestamp": prediction_time,
+        "explanation_note": (
+            "STUB IMPLEMENTATION: This is a placeholder prediction model contract (stub-v0.1.0). "
+            "ML5 will replace this stub with the trained production model while preserving this exact contract."
+        ),
+        "is_stub": True
+    }
+
+
 
 
