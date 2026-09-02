@@ -17,6 +17,9 @@ def get_network_summary(db: Session, as_of: Optional[datetime] = None) -> Option
             return None
         effective_as_of = result
     else:
+        # Round down to nearest hour (data is hourly granularity)
+        rounded_as_of = as_of.replace(minute=0, second=0, microsecond=0)
+        
         # Check if the requested timestamp exists in the analytics fact table
         check_query = text("""
             SELECT 1 
@@ -25,20 +28,20 @@ def get_network_summary(db: Session, as_of: Optional[datetime] = None) -> Option
             WHERE t.timestamp = :as_of
             LIMIT 1
         """)
-        exists = db.execute(check_query, {"as_of": as_of}).scalar()
+        exists = db.execute(check_query, {"as_of": rounded_as_of}).scalar()
         if not exists:
             return None
-        effective_as_of = as_of
+        effective_as_of = rounded_as_of
 
     # 130. Return total_activity, active_grids, peak_hour and top_grid.
-    # 1. Calculate total_activity at the effective as_of timestamp
+    # 1. Calculate total_activity across the ENTIRE dataset (not just one hour).
+    #    The dashboard KPI answers "how much activity in total" — scoping it to a
+    #    single as_of timestamp produces a single-hour sum which is misleading.
     total_activity_query = text("""
-        SELECT COALESCE(SUM(f.total_activity), 0.0)
-        FROM fact_network_activity f
-        JOIN dim_time t ON f.time_key = t.time_key
-        WHERE t.timestamp = :as_of
+        SELECT COALESCE(SUM(total_activity), 0.0)
+        FROM fact_network_activity
     """)
-    total_activity = float(db.execute(total_activity_query, {"as_of": effective_as_of}).scalar() or 0.0)
+    total_activity = float(db.execute(total_activity_query).scalar() or 0.0)
 
     # 2. Calculate active_grids (distinct grids with activity at effective as_of timestamp)
     active_grids_query = text("""
@@ -111,7 +114,8 @@ def get_grid_activity(
         if effective_as_of is None:
             return []
     else:
-        effective_as_of = as_of
+        # Round down to nearest hour (data is hourly granularity)
+        effective_as_of = as_of.replace(minute=0, second=0, microsecond=0)
 
     # Build query dynamically based on date/hour/default filters
     params = {"grid_id": grid_id, "as_of": effective_as_of}
@@ -221,7 +225,8 @@ def get_hotspots(
         if effective_as_of is None:
             return []
     else:
-        effective_as_of = as_of
+        # Round down to nearest hour (data is hourly granularity)
+        effective_as_of = as_of.replace(minute=0, second=0, microsecond=0)
 
     query_sql = text("""
         SELECT 
@@ -288,7 +293,8 @@ def get_alerts(
         if effective_as_of is None:
             return []
     else:
-        effective_as_of = as_of
+        # Round down to nearest hour (data is hourly granularity)
+        effective_as_of = as_of.replace(minute=0, second=0, microsecond=0)
 
     query_sql = text("""
         SELECT 

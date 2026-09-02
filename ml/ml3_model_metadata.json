@@ -1,0 +1,14 @@
+{
+    "model_version": "ml3_v1.0",
+    "model_type": "LogisticRegression",
+    "features": [
+        "avg_activity",
+        "activity_growth",
+        "active_hours",
+        "peak_ratio",
+        "variability",
+        "internet_share"
+    ],
+    "target": "next_hour_high_activity",
+    "target_threshold": 1154.5988
+}

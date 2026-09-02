@@ -3,11 +3,16 @@ export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0
 
 /**
  * Helper function to fetch the high-level network summary.
+ * Accepts an optional asOf ISO datetime string.
  * Returns the parsed JSON response or throws an error.
  */
-export async function getNetworkSummary() {
+export async function getNetworkSummary(asOf = '') {
   try {
-    const response = await fetch(`${API_BASE_URL}/network/summary`);
+    const params = new URLSearchParams();
+    if (asOf) params.append('as_of', asOf);
+    const queryString = params.toString() ? `?${params.toString()}` : '';
+    
+    const response = await fetch(`${API_BASE_URL}/network/summary${queryString}`);
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
       throw new Error(errorData.detail || `Server returned status ${response.status}`);

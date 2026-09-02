@@ -6,18 +6,35 @@ export default function NetworkSummary() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [selectedDateTime, setSelectedDateTime] = useState('');
 
-  // 166. Call /network/summary.
-  const loadSummary = async () => {
+  // 166. Call /network/summary with optional as_of parameter.
+  const loadSummary = async (asOf = '') => {
     setLoading(true);
     setError(null);
     try {
-      const summaryData = await getNetworkSummary();
+      const summaryData = await getNetworkSummary(asOf);
       setData(summaryData);
     } catch (err) {
       setError(err.message || 'API endpoint unavailable or failed to respond');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleDateTimeChange = (e) => {
+    const value = e.target.value;
+    setSelectedDateTime(value);
+  };
+
+  const handleApplyDateTime = () => {
+    if (selectedDateTime) {
+      // Convert from datetime-local format (YYYY-MM-DDTHH:mm) to ISO format (YYYY-MM-DDTHH:mm:00)
+      const isoDateTime = selectedDateTime + ':00';
+      loadSummary(isoDateTime);
+    } else {
+      // Load default (latest)
+      loadSummary();
     }
   };
 
@@ -47,6 +64,32 @@ export default function NetworkSummary() {
         <div>
           <h2>Network Overview</h2>
           <p className="header-subtitle">High-level operational metrics across all monitored cells</p>
+        </div>
+
+        {/* DateTime selector for as_of filtering */}
+        <div className="datetime-selector">
+          <input
+            type="datetime-local"
+            value={selectedDateTime}
+            onChange={handleDateTimeChange}
+            placeholder="Select date and time"
+            className="datetime-input"
+          />
+          <button
+            onClick={handleApplyDateTime}
+            className="apply-datetime-btn"
+            disabled={loading}
+          >
+            {loading ? 'Loading...' : 'Apply'}
+          </button>
+          {selectedDateTime === '' && data && (
+            <button
+              onClick={() => { setSelectedDateTime(''); loadSummary(); }}
+              className="clear-datetime-btn"
+            >
+              Latest
+            </button>
+          )}
         </div>
 
         {/* 168. Show the as_of value returned by the API as the reporting timestamp — do not display the browser clock, which would be misleading on a historical dataset. */}

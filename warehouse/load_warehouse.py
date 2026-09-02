@@ -215,17 +215,48 @@ def load_activity_data():
         f"{len(fact_df)} rows"
     )
 
-    fact_df.to_sql(
-        "fact_network_activity",
-        engine,
-        if_exists="append",
-        index=False,
-        chunksize=5000
-    )
+    # Only insert records that don't already exist
+    with engine.connect() as conn:
 
-    print(
-        "fact_network_activity loaded."
-    )
+        existing = pd.read_sql(
+            text("SELECT grid_id, time_key FROM fact_network_activity"),
+            conn
+        )
+
+    if not existing.empty:
+
+        # Create a composite key for comparison
+        existing['composite_key'] = (
+            existing['grid_id'].astype(str) + '-' + existing['time_key']
+        )
+
+        fact_df['composite_key'] = (
+            fact_df['grid_id'].astype(str) + '-' + fact_df['time_key']
+        )
+
+        fact_df = fact_df[
+            ~fact_df['composite_key'].isin(existing['composite_key'])
+        ]
+
+        fact_df = fact_df.drop(columns=['composite_key'])
+
+    if not fact_df.empty:
+
+        fact_df.to_sql(
+            "fact_network_activity",
+            engine,
+            if_exists="append",
+            index=False,
+            chunksize=5000
+        )
+
+        print(
+            f"fact_network_activity loaded: {len(fact_df)} new rows"
+        )
+
+    else:
+
+        print("fact_network_activity: No new rows to insert.")
 
 
 # ================================================================
