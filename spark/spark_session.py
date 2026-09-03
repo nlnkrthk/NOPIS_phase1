@@ -70,6 +70,7 @@ def create_spark_session(
         .master("local[*]")
         .config("spark.hadoop.home.dir", hadoop_home)
         .config("spark.local.dir", spark_tmp)
+        .config("spark.sql.session.timeZone", "UTC")
         .config(
             "spark.driver.extraJavaOptions",
             f"-Djava.io.tmpdir={spark_tmp}",

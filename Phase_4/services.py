@@ -2,88 +2,118 @@ from datetime import datetime, timezone
 from typing import Optional, Dict, Any, List
 from sqlalchemy import text
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import SQLAlchemyError
+from fastapi import HTTPException
 
 # 133. Query the warehouse and analytics layer rather than raw CSV.
-def get_network_summary(db: Session, as_of: Optional[datetime] = None) -> Optional[Dict[str, Any]]:
-    # 131.Accept an optional as_of query parameter. When absent, default to the configured AS_OF — the maximum timestamp in the analytics layer. Never hardcode a date.
-    if as_of is None:
-        max_ts_query = text("""
-            SELECT MAX(t.timestamp) 
+def get_network_summary(
+    db: Session,
+    from_dt: Optional[datetime] = None,
+    to_dt: Optional[datetime] = None,
+    as_of: Optional[datetime] = None,
+) -> Optional[Dict[str, Any]]:
+    # 131. Accept optional range or as_of parameters and resolve missing
+    # bounds from the analytics layer. Never hardcode a date.
+    
+    # Determine effective datetime range
+    if from_dt is None or to_dt is None:
+        # time_key is generated as YYYYMMDDHH, so its indexed bounds identify
+        # the first and last timestamps without scanning the joined fact table.
+        range_query = text("""
+            SELECT MIN(t.timestamp), MAX(t.timestamp)
             FROM dim_time t
-            JOIN fact_network_activity f ON f.time_key = t.time_key
+            JOIN (
+                SELECT MIN(time_key) AS first_time_key,
+                       MAX(time_key) AS last_time_key
+                FROM fact_network_activity
+            ) bounds
+              ON t.time_key IN (bounds.first_time_key, bounds.last_time_key)
         """)
-        result = db.execute(max_ts_query).scalar()
-        if result is None:
+        try:
+            result = db.execute(range_query).first()
+            if result is None or result[0] is None:
+                return None
+            
+            if as_of is not None:
+                if from_dt is not None or to_dt is not None:
+                    return None
+                effective_from = result[0]
+                effective_to = as_of
+            else:
+                effective_from = from_dt if from_dt is not None else result[0]
+                effective_to = to_dt if to_dt is not None else result[1]
+        except SQLAlchemyError:
+            raise
+        except Exception:
+            # If query fails, return None rather than hanging
             return None
-        effective_as_of = result
     else:
-        # Round down to nearest hour (data is hourly granularity)
-        rounded_as_of = as_of.replace(minute=0, second=0, microsecond=0)
-        
-        # Check if the requested timestamp exists in the analytics fact table
-        check_query = text("""
-            SELECT 1 
-            FROM dim_time t
-            JOIN fact_network_activity f ON f.time_key = t.time_key
-            WHERE t.timestamp = :as_of
-            LIMIT 1
-        """)
-        exists = db.execute(check_query, {"as_of": rounded_as_of}).scalar()
-        if not exists:
+        if as_of is not None:
             return None
-        effective_as_of = rounded_as_of
+        effective_from = from_dt
+        effective_to = to_dt
+    
+    # Validate range
+    if effective_from > effective_to:
+        return None
 
     # 130. Return total_activity, active_grids, peak_hour and top_grid.
-    # 1. Calculate total_activity across the ENTIRE dataset (not just one hour).
-    #    The dashboard KPI answers "how much activity in total" — scoping it to a
-    #    single as_of timestamp produces a single-hour sum which is misleading.
-    total_activity_query = text("""
-        SELECT COALESCE(SUM(total_activity), 0.0)
-        FROM fact_network_activity
-    """)
-    total_activity = float(db.execute(total_activity_query).scalar() or 0.0)
+    try:
+        params = {
+            "from_dt": effective_from,
+            "to_dt": effective_to,
+            "from_key": effective_from.strftime("%Y%m%d%H"),
+            "to_key": effective_to.strftime("%Y%m%d%H")
+        }
+        range_filter = """
+            FROM fact_network_activity f
+            JOIN dim_time t ON f.time_key = t.time_key
+            WHERE f.time_key BETWEEN :from_key AND :to_key
+              AND t.timestamp >= :from_dt AND t.timestamp <= :to_dt
+        """
 
-    # 2. Calculate active_grids (distinct grids with activity at effective as_of timestamp)
-    active_grids_query = text("""
-        SELECT COUNT(DISTINCT f.grid_id)
-        FROM fact_network_activity f
-        JOIN dim_time t ON f.time_key = t.time_key
-        WHERE t.timestamp = :as_of
-    """)
-    active_grids = int(db.execute(active_grids_query, {"as_of": effective_as_of}).scalar() or 0)
+        total_activity = db.execute(text(
+            "SELECT COALESCE(SUM(f.total_activity), 0.0) " + range_filter
+        ), params).scalar()
+        active_grids = db.execute(text(
+            "SELECT COUNT(DISTINCT f.grid_id) " + range_filter
+        ), params).scalar()
 
-    # 3. Calculate peak_hour (hour of day 0-23 with highest activity across analytics dataset)
-    peak_hour_query = text("""
-        SELECT t.hour, SUM(f.total_activity) AS activity
-        FROM fact_network_activity f
-        JOIN dim_time t ON f.time_key = t.time_key
-        GROUP BY t.hour
-        ORDER BY activity DESC
-        LIMIT 1
-    """)
-    peak_hour_row = db.execute(peak_hour_query).first()
-    peak_hour = int(peak_hour_row[0]) if peak_hour_row is not None else 0
+        if not active_grids:
+            return None
 
-    # 4. Calculate top_grid (grid with highest total activity at effective as_of timestamp)
-    top_grid_query = text("""
-        SELECT f.grid_id, SUM(f.total_activity) AS activity
-        FROM fact_network_activity f
-        JOIN dim_time t ON f.time_key = t.time_key
-        WHERE t.timestamp = :as_of
-        GROUP BY f.grid_id
-        ORDER BY activity DESC
-        LIMIT 1
-    """)
-    top_grid_row = db.execute(top_grid_query, {"as_of": effective_as_of}).first()
-    top_grid = int(top_grid_row[0]) if top_grid_row is not None else 0
+        peak_hour = db.execute(text(
+            """
+            SELECT t.hour
+            """ + range_filter + """
+            GROUP BY t.hour
+            ORDER BY SUM(f.total_activity) DESC, t.hour ASC
+            LIMIT 1
+            """
+        ), params).scalar()
+        top_grid = db.execute(text(
+            """
+            SELECT f.grid_id
+            """ + range_filter + """
+            GROUP BY f.grid_id
+            ORDER BY SUM(f.total_activity) DESC, f.grid_id ASC
+            LIMIT 1
+            """
+        ), params).scalar()
 
-    return {
-        "total_activity": total_activity,
-        "active_grids": active_grids,
-        "peak_hour": peak_hour,
-        "top_grid": top_grid,
-        "as_of": effective_as_of
-    }
+        return {
+            "total_activity": float(total_activity or 0.0),
+            "active_grids": int(active_grids),
+            "peak_hour": int(peak_hour or 0),
+            "top_grid": int(top_grid or 0),
+            "from_dt": effective_from,
+            "to_dt": effective_to
+        }
+    except SQLAlchemyError:
+        raise
+    except Exception:
+        # Return None on any database error rather than hanging
+        return None
 
 # 136. Add optional date, hour and as_of query parameters. Default the window to the trailing 24 hourly intervals ending at AS_OF.
 # 138. Return 404 for an unknown grid — and treat any grid_id outside 1–10000 as unknown.
@@ -92,7 +122,9 @@ def get_grid_activity(
     grid_id: int, 
     filter_date: Optional[Any] = None, 
     filter_hour: Optional[int] = None, 
-    as_of: Optional[datetime] = None
+    as_of: Optional[datetime] = None,
+    from_dt: Optional[datetime] = None,
+    to_dt: Optional[datetime] = None,
 ) -> Optional[list]:
     # Validate grid boundary 1-10000
     if grid_id < 1 or grid_id > 10000:
@@ -101,6 +133,12 @@ def get_grid_activity(
     # Verify grid exists in dim_grid
     grid_exists_query = text("SELECT 1 FROM dim_grid WHERE grid_id = :grid_id LIMIT 1")
     if not db.execute(grid_exists_query, {"grid_id": grid_id}).scalar():
+        return None
+
+    if as_of is not None and (from_dt is not None or to_dt is not None):
+        return None
+
+    if (from_dt is None) != (to_dt is None):
         return None
 
     # Determine effective as_of
@@ -117,9 +155,20 @@ def get_grid_activity(
         # Round down to nearest hour (data is hourly granularity)
         effective_as_of = as_of.replace(minute=0, second=0, microsecond=0)
 
-    # Build query dynamically based on date/hour/default filters
+    # Build query dynamically based on date/hour/range filters.
     params = {"grid_id": grid_id, "as_of": effective_as_of}
     where_clauses = ["f.grid_id = :grid_id"]
+
+    if from_dt is not None and to_dt is not None:
+        from_dt = from_dt.replace(minute=0, second=0, microsecond=0)
+        to_dt = to_dt.replace(minute=0, second=0, microsecond=0)
+        if from_dt > to_dt:
+            return None
+        params.update({"from_dt": from_dt, "to_dt": to_dt})
+        where_clauses.extend([
+            "t.timestamp >= :from_dt",
+            "t.timestamp <= :to_dt",
+        ])
 
     if filter_date is not None:
         where_clauses.append("t.date = :filter_date")
@@ -129,12 +178,17 @@ def get_grid_activity(
         where_clauses.append("t.hour = :filter_hour")
         params["filter_hour"] = filter_hour
 
-    # If no specific date filter is provided, bound by effective_as_of
-    if filter_date is None:
+    # As-of mode is cumulative from the first available timestamp.
+    if as_of is not None:
         where_clauses.append("t.timestamp <= :as_of")
 
     # Default window: trailing 24 hourly intervals ending at as_of
-    is_default_window = (filter_date is None and filter_hour is None)
+    is_default_window = (
+        filter_date is None
+        and filter_hour is None
+        and as_of is None
+        and from_dt is None
+    )
 
     where_sql = " AND ".join(where_clauses)
 
@@ -421,27 +475,87 @@ def predict_grid_risk(db: Session, request_data: Any) -> Optional[dict]:
     if not grid_exists:
         return None
 
-    # Determine activity level from stored features or fact table to generate a realistic stub score
-    feat_row = db.execute(text("SELECT avg_activity FROM grid_features WHERE grid_id = :grid_id LIMIT 1"), {"grid_id": grid_id}).mappings().first()
-    avg_act = float(feat_row["avg_activity"]) if feat_row else 0.0
+    # Resolve features (request overrides take precedence over stored features)
+    req_features = {
+        "avg_activity": request_data.avg_activity,
+        "activity_growth": request_data.activity_growth,
+        "active_hours": request_data.active_hours,
+        "peak_ratio": request_data.peak_ratio,
+        "variability": request_data.variability,
+        "internet_share": request_data.internet_share
+    }
 
-    # If avg_activity was explicitly overridden in the request payload
-    if request_data.avg_activity is not None:
-        avg_act = float(request_data.avg_activity)
+    # If any feature is missing, fetch from grid_features
+    if any(v is None for v in req_features.values()):
+        feat_row = db.execute(
+            text("""SELECT avg_activity, activity_growth, active_hours, 
+                           peak_ratio, variability, internet_share 
+                    FROM grid_features WHERE grid_id = :grid_id LIMIT 1"""), 
+            {"grid_id": grid_id}
+        ).mappings().first()
+        
+        if feat_row:
+            for k in req_features:
+                if req_features[k] is None:
+                    req_features[k] = float(feat_row[k])
+    
+    # Final check for missing features
+    missing = [k for k, v in req_features.items() if v is None]
+    if missing:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Missing required ML features for inference: {', '.join(missing)}"
+        )
 
-    # Heuristic stub scoring
-    if avg_act >= 2000:
-        risk_score = 0.85
+    # Build canonical feature vector
+    try:
+        from Phase_4 import ml5_model_service
+    except ModuleNotFoundError:
+        import ml5_model_service
+
+    feature_vector = [
+        req_features["avg_activity"],
+        req_features["activity_growth"],
+        req_features["active_hours"],
+        req_features["peak_ratio"],
+        req_features["variability"],
+        req_features["internet_share"]
+    ]
+
+    # Model inference
+    risk_score = ml5_model_service.predict(feature_vector)
+    
+    if risk_score >= 0.75:
         risk_level = "CRITICAL"
-    elif avg_act >= 1000:
-        risk_score = 0.65
+    elif risk_score >= 0.50:
         risk_level = "HIGH"
-    elif avg_act >= 400:
-        risk_score = 0.45
+    elif risk_score >= 0.25:
         risk_level = "MEDIUM"
     else:
-        risk_score = 0.15
         risk_level = "LOW"
+
+    # Fetch Anomaly Context (ML4)
+    anomaly_row = db.execute(
+        text("""SELECT direction, anomaly_score, reason 
+                FROM network_anomaly_scores 
+                WHERE grid_id = :grid_id 
+                ORDER BY feature_timestamp DESC LIMIT 1"""),
+        {"grid_id": grid_id}
+    ).mappings().first()
+
+    # Get top feature contribution
+    top_features = ml5_model_service.get_feature_contributions()
+    top_feature_name, top_feature_val = top_features[0]
+
+    explanation = (
+        f"Real ML prediction using {ml5_model_service.MODEL_VERSION}. "
+        f"Most influential feature: {top_feature_name} (weight: {top_feature_val:.3f})."
+    )
+    if anomaly_row:
+        explanation += (
+            f" Anomaly context: {anomaly_row['direction']} "
+            f"(score: {anomaly_row['anomaly_score']:.1f}%). {anomaly_row['reason']}"
+        )
 
     prediction_time = datetime.now(timezone.utc).replace(tzinfo=None)
 
@@ -449,13 +563,10 @@ def predict_grid_risk(db: Session, request_data: Any) -> Optional[dict]:
         "grid_id": grid_id,
         "risk_score": float(risk_score),
         "risk_level": risk_level,
-        "model_version": "stub-v0.1.0",
+        "model_version": ml5_model_service.MODEL_VERSION,
         "prediction_timestamp": prediction_time,
-        "explanation_note": (
-            "STUB IMPLEMENTATION: This is a placeholder prediction model contract (stub-v0.1.0). "
-            "ML5 will replace this stub with the trained production model while preserving this exact contract."
-        ),
-        "is_stub": True
+        "explanation_note": explanation,
+        "is_stub": False
     }
 
 

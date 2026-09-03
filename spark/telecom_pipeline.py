@@ -76,6 +76,14 @@ def _setup_logging():
     )
 
 
+def load_warehouse():
+    """Load the successful Spark output into the SQL warehouse."""
+    from warehouse.load_warehouse import load_dim_grid, load_activity_data
+
+    load_dim_grid()
+    load_activity_data()
+
+
 # ═════════════════════════════════════════════════════════════════
 # Argument parsing
 # ═════════════════════════════════════════════════════════════════
@@ -275,6 +283,10 @@ def main():
             processed_path=paths["processed"],
             analytics_path=paths["analytics"],
         )
+
+        # ── 6c. Load the complete output into MySQL ─────────────
+        logger.info("Stage 6c/6 — Loading SQL warehouse")
+        load_warehouse()
 
         status = "SUCCESS"
 

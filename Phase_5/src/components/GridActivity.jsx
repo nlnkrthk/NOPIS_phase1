@@ -3,14 +3,19 @@ import { getGridActivity } from '../api/config';
 
 export default function GridActivity({ initialGridId }) {
   const [gridInput, setGridInput] = useState(initialGridId ? String(initialGridId) : '4821');
-  const [filterMode, setFilterMode] = useState('date_hour'); // 'date_hour' or 'as_of'
+  const [filterMode, setFilterMode] = useState('date_hour'); // 'date_hour', 'range', or 'as_of'
   const [dateFilter, setDateFilter] = useState('');
   const [hourFilter, setHourFilter] = useState('');
   const [asOfTimestamp, setAsOfTimestamp] = useState('');
+  const [rangeFromDate, setRangeFromDate] = useState('');
+  const [rangeFromHour, setRangeFromHour] = useState('');
+  const [rangeToDate, setRangeToDate] = useState('');
+  const [rangeToHour, setRangeToHour] = useState('');
   const [activeGridId, setActiveGridId] = useState(initialGridId ? String(initialGridId) : '4821');
   const [activeDate, setActiveDate] = useState('');
   const [activeHour, setActiveHour] = useState('');
   const [activeAsOf, setActiveAsOf] = useState('');
+  const [activeRange, setActiveRange] = useState({ from: '', to: '' });
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -18,8 +23,13 @@ export default function GridActivity({ initialGridId }) {
   const [viewMode, setViewMode] = useState('chart'); // 'chart' or 'table'
   const [hoveredPoint, setHoveredPoint] = useState(null);
 
-  // 172. Call GET/network/grid/{grid_id} with optional date, hour, and as_of filters.
-  const fetchGridData = async (gridIdToFetch, mode = 'date_hour', selectedDate = '', selectedHour = '', selectedAsOf = '') => {
+  const rangeOptions = () => ({
+    from_dt: rangeFromDate && rangeFromHour ? `${rangeFromDate}T${rangeFromHour}:00:00` : '',
+    to_dt: rangeToDate && rangeToHour ? `${rangeToDate}T${rangeToHour}:00:00` : '',
+  });
+
+  // 172. Call GET/network/grid/{grid_id} with the selected time filter.
+  const fetchGridData = async (gridIdToFetch, mode = filterMode, selectedOptions = {}) => {
     if (!gridIdToFetch) return;
     setLoading(true);
     setError(null);
@@ -27,26 +37,29 @@ export default function GridActivity({ initialGridId }) {
     setHoveredPoint(null);
 
     try {
-      const options = {};
-      // Only pass filters relevant to the selected mode
-      if (mode === 'date_hour') {
-        if (selectedDate) options.date = selectedDate;
-        if (selectedHour !== '') options.hour = parseInt(selectedHour, 10);
-      } else if (mode === 'as_of') {
-        if (selectedAsOf) options.as_of = selectedAsOf;
+      const options = { ...selectedOptions };
+      if (mode === 'date_hour' && options.hour !== '') {
+        options.hour = parseInt(options.hour, 10);
       }
       
       const result = await getGridActivity(gridIdToFetch, options);
       setData(result);
       setActiveGridId(gridIdToFetch);
       if (mode === 'date_hour') {
-        setActiveDate(selectedDate);
-        setActiveHour(selectedHour);
+        setActiveDate(options.date || '');
+        setActiveHour(options.hour === undefined ? '' : options.hour);
         setActiveAsOf('');
-      } else {
-        setActiveAsOf(selectedAsOf);
+        setActiveRange({ from: '', to: '' });
+      } else if (mode === 'range') {
+        setActiveRange({ from: options.from_dt || '', to: options.to_dt || '' });
         setActiveDate('');
         setActiveHour('');
+        setActiveAsOf('');
+      } else {
+        setActiveAsOf(options.as_of || '');
+        setActiveDate('');
+        setActiveHour('');
+        setActiveRange({ from: '', to: '' });
       }
     } catch (err) {
       setData(null);
@@ -64,9 +77,11 @@ export default function GridActivity({ initialGridId }) {
 
   useEffect(() => {
     if (filterMode === 'date_hour') {
-      fetchGridData(activeGridId, 'date_hour', dateFilter, hourFilter, '');
+      fetchGridData(activeGridId, 'date_hour', { date: dateFilter, hour: hourFilter });
+    } else if (filterMode === 'range') {
+      fetchGridData(activeGridId, 'range', rangeOptions());
     } else {
-      fetchGridData(activeGridId, 'as_of', '', '', asOfTimestamp);
+      fetchGridData(activeGridId, 'as_of', { as_of: asOfTimestamp });
     }
   }, []);
 
@@ -75,9 +90,11 @@ export default function GridActivity({ initialGridId }) {
     const cleanId = gridInput.trim();
     if (cleanId) {
       if (filterMode === 'date_hour') {
-        fetchGridData(cleanId, 'date_hour', dateFilter, hourFilter, '');
+        fetchGridData(cleanId, 'date_hour', { date: dateFilter, hour: hourFilter });
+      } else if (filterMode === 'range') {
+        fetchGridData(cleanId, 'range', rangeOptions());
       } else {
-        fetchGridData(cleanId, 'as_of', '', '', asOfTimestamp);
+        fetchGridData(cleanId, 'as_of', { as_of: asOfTimestamp });
       }
     }
   };
@@ -85,9 +102,11 @@ export default function GridActivity({ initialGridId }) {
   const selectQuickGrid = (id) => {
     setGridInput(String(id));
     if (filterMode === 'date_hour') {
-      fetchGridData(String(id), 'date_hour', dateFilter, hourFilter, '');
+      fetchGridData(String(id), 'date_hour', { date: dateFilter, hour: hourFilter });
+    } else if (filterMode === 'range') {
+      fetchGridData(String(id), 'range', rangeOptions());
     } else {
-      fetchGridData(String(id), 'as_of', '', '', asOfTimestamp);
+      fetchGridData(String(id), 'as_of', { as_of: asOfTimestamp });
     }
   };
 
@@ -95,7 +114,11 @@ export default function GridActivity({ initialGridId }) {
     setDateFilter('');
     setHourFilter('');
     setAsOfTimestamp('');
-    fetchGridData(gridInput, filterMode, '', '', '');
+    setRangeFromDate('');
+    setRangeFromHour('');
+    setRangeToDate('');
+    setRangeToHour('');
+    fetchGridData(gridInput, filterMode, filterMode === 'range' ? rangeOptions() : {});
   };
 
   const handleFilterModeChange = (mode) => {
@@ -104,6 +127,10 @@ export default function GridActivity({ initialGridId }) {
     setDateFilter('');
     setHourFilter('');
     setAsOfTimestamp('');
+    setRangeFromDate('');
+    setRangeFromHour('');
+    setRangeToDate('');
+    setRangeToHour('');
     setData(null);
   };
 
@@ -190,6 +217,13 @@ export default function GridActivity({ initialGridId }) {
               </button>
               <button
                 type="button"
+                className={`toggle-option ${filterMode === 'range' ? 'active' : ''}`}
+                onClick={() => handleFilterModeChange('range')}
+              >
+                By Range
+              </button>
+              <button
+                type="button"
                 className={`toggle-option ${filterMode === 'as_of' ? 'active' : ''}`}
                 onClick={() => handleFilterModeChange('as_of')}
               >
@@ -244,20 +278,52 @@ export default function GridActivity({ initialGridId }) {
                 </button>
               )}
             </div>
+          ) : filterMode === 'range' ? (
+            <div className="search-row">
+              <div className="form-group">
+                <label htmlFor="range-from-date" className="search-label">From Date:</label>
+                <input id="range-from-date" type="date" className="grid-search-input" value={rangeFromDate} onChange={(e) => setRangeFromDate(e.target.value)} />
+              </div>
+              <div className="form-group">
+                <label htmlFor="range-from-hour" className="search-label">From Hour:</label>
+                <select id="range-from-hour" className="grid-search-input" value={rangeFromHour} onChange={(e) => setRangeFromHour(e.target.value)}>
+                  <option value="">Select hour</option>
+                  {Array.from({ length: 24 }, (_, i) => <option key={i} value={String(i).padStart(2, '0')}>{String(i).padStart(2, '0')}:00</option>)}
+                </select>
+              </div>
+              <div className="form-group">
+                <label htmlFor="range-to-date" className="search-label">To Date:</label>
+                <input id="range-to-date" type="date" className="grid-search-input" value={rangeToDate} onChange={(e) => setRangeToDate(e.target.value)} />
+              </div>
+              <div className="form-group">
+                <label htmlFor="range-to-hour" className="search-label">To Hour:</label>
+                <select id="range-to-hour" className="grid-search-input" value={rangeToHour} onChange={(e) => setRangeToHour(e.target.value)}>
+                  <option value="">Select hour</option>
+                  {Array.from({ length: 24 }, (_, i) => <option key={i} value={String(i).padStart(2, '0')}>{String(i).padStart(2, '0')}:00</option>)}
+                </select>
+              </div>
+              {(rangeFromDate || rangeFromHour || rangeToDate || rangeToHour) && <button type="button" className="clear-filter-btn" onClick={handleClearFilters}>Clear Filters</button>}
+            </div>
           ) : (
             <div className="search-row">
               <div className="form-group">
                 <label htmlFor="as-of-filter" className="search-label">
-                  Enter As-Of Timestamp (Data up to this time):
+                  As-Of Date:
                 </label>
                 <input
                   id="as-of-filter"
-                  type="datetime-local"
+                  type="date"
                   className="grid-search-input"
-                  value={asOfTimestamp}
-                  onChange={(e) => setAsOfTimestamp(e.target.value)}
-                  placeholder="YYYY-MM-DDTHH:mm"
+                  value={asOfTimestamp.split('T')[0] || ''}
+                  onChange={(e) => setAsOfTimestamp(`${e.target.value}T${asOfTimestamp.split('T')[1] || ''}`)}
                 />
+              </div>
+              <div className="form-group">
+                <label htmlFor="as-of-hour" className="search-label">As-Of Hour:</label>
+                <select id="as-of-hour" className="grid-search-input" value={asOfTimestamp.split('T')[1]?.slice(0, 2) || ''} onChange={(e) => setAsOfTimestamp(`${asOfTimestamp.split('T')[0] || ''}T${e.target.value}:00:00`)}>
+                  <option value="">Select hour</option>
+                  {Array.from({ length: 24 }, (_, i) => <option key={i} value={String(i).padStart(2, '0')}>{String(i).padStart(2, '0')}:00</option>)}
+                </select>
               </div>
 
               {asOfTimestamp && (
@@ -273,19 +339,6 @@ export default function GridActivity({ initialGridId }) {
           )}
         </form>
 
-        <div className="quick-select-bar">
-          <span className="quick-label">Sample Grids:</span>
-          {['4821', '5000', '1000', '99999'].map((id) => (
-            <button
-              key={id}
-              type="button"
-              className={`quick-pill ${activeGridId === id && !dateFilter ? 'active-pill' : ''} ${id === '99999' ? 'pill-invalid' : ''}`}
-              onClick={() => selectQuickGrid(id)}
-            >
-              Grid {id} {id === '99999' ? '(Invalid)' : ''}
-            </button>
-          ))}
-        </div>
       </div>
 
       {/* 175. Handle an unknown grid gracefully. */}
@@ -297,7 +350,11 @@ export default function GridActivity({ initialGridId }) {
             <p>{error}</p>
           </div>
           {!isNotFound && (
-            <button className="retry-btn" onClick={() => fetchGridData(activeGridId, activeDate)}>
+            <button className="retry-btn" onClick={() => {
+              if (filterMode === 'range') fetchGridData(activeGridId, 'range', rangeOptions());
+              else if (filterMode === 'as_of') fetchGridData(activeGridId, 'as_of', { as_of: asOfTimestamp });
+              else fetchGridData(activeGridId, 'date_hour', { date: dateFilter, hour: hourFilter });
+            }}>
               Retry
             </button>
           )}
@@ -325,7 +382,8 @@ export default function GridActivity({ initialGridId }) {
                 )}
                 {activeDate && <span>📅 Date: <strong>{activeDate}</strong></span>}
                 {activeHour !== '' && <span>⏰ Hour: <strong>{String(activeHour).padStart(2, '0')}:00</strong></span>}
-                {activeAsOf && <span>� Data As Of (Last 24h): <strong>{activeAsOf}</strong></span>}
+                {activeRange.from && activeRange.to && <span>↔ Range: <strong>{activeRange.from}</strong> to <strong>{activeRange.to}</strong></span>}
+                {activeAsOf && <span>⌛ Data As Of (from start): <strong>{activeAsOf}</strong></span>}
               </div>
             </div>
 

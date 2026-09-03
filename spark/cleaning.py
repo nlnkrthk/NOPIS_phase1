@@ -8,6 +8,8 @@ import logging
 
 from pyspark.sql.functions import (
     col,
+    coalesce,
+    lit,
     when,
     to_date,
     hour,
@@ -95,11 +97,11 @@ def clean(spark, raw_df):
     reject_condition = (
         col("grid_id").isNull()
         | col("timestamp").isNull()
-        | (col("sms_in") < 0)
-        | (col("sms_out") < 0)
-        | (col("call_in") < 0)
-        | (col("call_out") < 0)
-        | (col("internet_activity") < 0)
+        | (coalesce(col("sms_in"), lit(0.0)) < 0)
+        | (coalesce(col("sms_out"), lit(0.0)) < 0)
+        | (coalesce(col("call_in"), lit(0.0)) < 0)
+        | (coalesce(col("call_out"), lit(0.0)) < 0)
+        | (coalesce(col("internet_activity"), lit(0.0)) < 0)
     )
 
     rejected_count = df.filter(reject_condition).count()

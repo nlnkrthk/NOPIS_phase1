@@ -24,38 +24,52 @@ export default function MapLayer({ geoData, hotspots, alerts, onGridSelect }) {
   const allFeatures = geoData; // Use the full geoData without filtering
 
   // Determine severity for a grid
-  const getGridSeverity = (gridId) => {
-    // Alert takes precedence if it's HIGH, otherwise check hotspot severity
+  const getGridStatus = (gridId) => {
     const alert = alertMap.get(gridId);
     const hotspot = hotspotMap.get(gridId);
-    
-    if (alert && alert.severity === 'HIGH') return 'HIGH';
-    if (hotspot && hotspot.severity === 'HIGH') return 'HIGH';
-    if (alert && alert.severity === 'ATTENTION') return 'ATTENTION';
-    if (hotspot && hotspot.severity === 'ATTENTION') return 'ATTENTION';
-    
-    return 'NORMAL';
+    const severityOrder = ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW', 'INFO'];
+    const severities = [alert?.severity, hotspot?.severity].filter(Boolean);
+    const severity = severities.sort((a, b) => {
+      const aIndex = severityOrder.indexOf(a);
+      const bIndex = severityOrder.indexOf(b);
+      return (aIndex === -1 ? severityOrder.length : aIndex) -
+        (bIndex === -1 ? severityOrder.length : bIndex);
+    })[0] || '';
+
+    return {
+      severity,
+      source: alert ? 'Alert' : hotspot ? 'Hotspot' : ''
+    };
   };
 
-  // 181.Visually distinguish NORMAL, ATTENTION and HIGH in both the ranked table and the map.
+  // 181. Visually distinguish each API severity in both the ranked table and the map.
   const styleFeature = (feature) => {
     const gridId = feature.properties.cellId;
-    const severity = getGridSeverity(gridId);
+    const { severity, source } = getGridStatus(gridId);
     
-    let color = '#3b82f6'; // NORMAL border blue
+    let color = source === 'Hotspot' ? '#f59e0b' : '#3b82f6';
     let dashArray = '';
     let weight = 2;
-    let fillOpacity = 0; // no fill for normal
+    let fillOpacity = 0;
     
-    if (severity === 'HIGH') {
-      color = '#ef4444'; // Red
+    if (severity === 'CRITICAL') {
+      color = '#facc15';
       weight = 4;
-      fillOpacity = 0.6; // keep red fill highlight
-    } else if (severity === 'ATTENTION') {
-      color = '#f59e0b'; // Amber
-      dashArray = '5, 5'; // Dashed border so it doesn't rely on color alone
+      fillOpacity = 0.6;
+    } else if (severity === 'HIGH') {
+      color = source === 'Hotspot' ? '#f59e0b' : '#ef4444';
+      weight = 4;
+      fillOpacity = 0.5;
+    } else if (severity === 'MEDIUM') {
+      color = source === 'Hotspot' ? '#d97706' : '#f59e0b';
       weight = 3;
-      fillOpacity = 0; // no fill for attention, only outline
+      fillOpacity = 0.3;
+    } else if (severity === 'LOW') {
+      color = source === 'Hotspot' ? '#fbbf24' : '#3b82f6';
+      dashArray = '5, 5';
+    } else if (severity === 'INFO') {
+      color = '#64748b';
+      dashArray = '2, 4';
     }
 
     return {
@@ -70,11 +84,16 @@ export default function MapLayer({ geoData, hotspots, alerts, onGridSelect }) {
   // 182. Allow a selected or highlighted polygon to open the Grid Explorer for that grid.
   const onEachFeature = (feature, layer) => {
     const gridId = feature.properties.cellId;
-    const severity = getGridSeverity(gridId);
-    
-    layer.bindTooltip(`
+    const status = getGridStatus(gridId);
+    const baseStyle = styleFeature(feature);
+
+    layer.bindTooltip(status.severity ? `
       <strong>Grid #${gridId}</strong><br/>
-      Status: ${severity}
+      ${status.source}<br/>
+      Severity: ${status.severity}
+    ` : `
+      <strong>Grid #${gridId}</strong><br/>
+      Status: Normal
     `);
     
     layer.on({
@@ -83,11 +102,15 @@ export default function MapLayer({ geoData, hotspots, alerts, onGridSelect }) {
       },
       mouseover: (e) => {
         const target = e.target;
-        target.setStyle({ fillOpacity: 0.8 });
+        target.bringToFront();
+        target.setStyle({
+          fillOpacity: Math.max(baseStyle.fillOpacity, 0.8),
+          weight: baseStyle.weight + 1
+        });
       },
       mouseout: (e) => {
         const target = e.target;
-        target.setStyle({ fillOpacity: styleFeature(feature).fillOpacity });
+        target.setStyle(baseStyle);
       }
     });
   };
@@ -107,7 +130,10 @@ export default function MapLayer({ geoData, hotspots, alerts, onGridSelect }) {
           style={styleFeature}
           onEachFeature={onEachFeature}
           renderer={L.canvas()}
-          key={JSON.stringify(allFeatures.features.map(f => f.properties.cellId))}
+          key={JSON.stringify([
+            ...hotspots.map(item => `h-${item.grid_id}-${item.severity}`),
+            ...alerts.map(item => `a-${item.grid_id}-${item.severity}`)
+          ])}
         />
       )}
     </MapContainer>

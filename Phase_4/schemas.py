@@ -10,7 +10,8 @@ class NetworkSummaryResponse(BaseModel):
     active_grids: int
     peak_hour: int
     top_grid: int
-    as_of: datetime
+    from_dt: datetime
+    to_dt: datetime
 
 # 137. Return the activity time series and the derived measures.
 class GridActivityPoint(BaseModel):
@@ -104,7 +105,7 @@ class PredictRiskResponse(BaseModel):
     risk_level: str = Field(..., description="Categorical risk classification (LOW, MEDIUM, HIGH, CRITICAL)")
     model_version: str = Field(..., description="Identifier of the serving model version (stub marked clearly)")
     prediction_timestamp: datetime = Field(..., description="Timestamp when prediction was evaluated")
-    explanation_note: str = Field(..., description="Human-readable explanation of risk assessment or stub status note")
-    is_stub: bool = Field(True, description="Boolean flag indicating whether response is from a stub implementation")
+    explanation_note: str = Field(..., description="Human-readable explanation of risk assessment and anomaly context")
+    is_stub: bool = Field(False, description="Boolean flag indicating whether response is from a stub implementation")
 
 

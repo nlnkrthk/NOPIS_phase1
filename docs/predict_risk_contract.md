@@ -44,7 +44,7 @@ This contract defines the stable interface for the Network Risk Prediction Endpo
 | `model_version` | `string` | Identifies the serving model version (e.g. `"stub-v0.1.0"`, `"lgbm-v1.0.0"`). |
 | `prediction_timestamp` | `datetime` | ISO 8601 timestamp when prediction was generated. |
 | `explanation_note` | `string` | Human-readable explanation of risk assessment or stub status. |
-| `is_stub` | `boolean` | `true` for stub phase; `false` once ML5 production model is wired in. |
+| `is_stub` | `boolean` | `false` (no longer a stub) |
 
 ### Sample Response Payload
 ```json
@@ -52,10 +52,10 @@ This contract defines the stable interface for the Network Risk Prediction Endpo
   "grid_id": 4821,
   "risk_score": 0.65,
   "risk_level": "HIGH",
-  "model_version": "stub-v0.1.0",
+  "model_version": "ml3_v1.0",
   "prediction_timestamp": "2026-08-31T23:15:00",
-  "explanation_note": "STUB IMPLEMENTATION: This is a placeholder prediction model contract (stub-v0.1.0). ML5 will replace this stub with the trained production model while preserving this exact contract.",
-  "is_stub": true
+  "explanation_note": "Real ML prediction using ml3_v1.0. Most influential feature: peak_ratio (weight: 2.063). Anomaly context: NORMAL (score: 7.7%). Activity is within the normal range (61.60 vs baseline 57.21).",
+  "is_stub": false
 }
 ```
 

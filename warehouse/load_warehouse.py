@@ -108,6 +108,16 @@ def load_activity_data():
         f"Parquet rows: {len(df)}"
     )
 
+    expected_fact_rows = len(df)
+
+    # Refresh both tables with metadata-only truncation. A row-by-row DELETE
+    # holds millions of locks and can exceed MySQL's lock wait timeout.
+    with engine.connect() as conn:
+        conn.execute(text("SET FOREIGN_KEY_CHECKS = 0"))
+        conn.execute(text("TRUNCATE TABLE fact_network_activity"))
+        conn.execute(text("TRUNCATE TABLE dim_time"))
+        conn.execute(text("SET FOREIGN_KEY_CHECKS = 1"))
+
     # ------------------------------------------------------------
     # Create timestamp
     # ------------------------------------------------------------
@@ -156,22 +166,6 @@ def load_activity_data():
         f"{len(dim_time_df)} rows"
     )
 
-    # Only insert time keys that don't already exist
-    with engine.connect() as conn:
-
-        existing = pd.read_sql(
-            text("SELECT time_key FROM dim_time"),
-            conn
-        )
-
-    if not existing.empty:
-
-        dim_time_df = dim_time_df[
-            ~dim_time_df["time_key"].isin(
-                existing["time_key"]
-            )
-        ]
-
     if not dim_time_df.empty:
 
         dim_time_df.to_sql(
@@ -215,31 +209,6 @@ def load_activity_data():
         f"{len(fact_df)} rows"
     )
 
-    # Only insert records that don't already exist
-    with engine.connect() as conn:
-
-        existing = pd.read_sql(
-            text("SELECT grid_id, time_key FROM fact_network_activity"),
-            conn
-        )
-
-    if not existing.empty:
-
-        # Create a composite key for comparison
-        existing['composite_key'] = (
-            existing['grid_id'].astype(str) + '-' + existing['time_key']
-        )
-
-        fact_df['composite_key'] = (
-            fact_df['grid_id'].astype(str) + '-' + fact_df['time_key']
-        )
-
-        fact_df = fact_df[
-            ~fact_df['composite_key'].isin(existing['composite_key'])
-        ]
-
-        fact_df = fact_df.drop(columns=['composite_key'])
-
     if not fact_df.empty:
 
         fact_df.to_sql(
@@ -253,6 +222,17 @@ def load_activity_data():
         print(
             f"fact_network_activity loaded: {len(fact_df)} new rows"
         )
+
+        with engine.connect() as conn:
+            actual_fact_rows = conn.execute(
+                text("SELECT COUNT(*) FROM fact_network_activity")
+            ).scalar()
+
+        if actual_fact_rows != expected_fact_rows:
+            raise RuntimeError(
+                "fact_network_activity row-count mismatch: "
+                f"expected {expected_fact_rows}, found {actual_fact_rows}"
+            )
 
     else:
 

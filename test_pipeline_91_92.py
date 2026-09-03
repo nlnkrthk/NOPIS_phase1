@@ -246,6 +246,7 @@ class TestAnalyticsOnlyAfterSuccess:
             patch("spark.telecom_pipeline.aggregate", return_value=mock_df),
             patch("spark.telecom_pipeline.enrich", return_value=mock_df),
             patch("spark.telecom_pipeline.write_outputs", side_effect=fake_write_outputs),
+            patch("spark.telecom_pipeline.load_warehouse"),
             patch("sys.exit"),
         ):
             from spark.telecom_pipeline import main

@@ -2,10 +2,13 @@ import React, { useState, useEffect } from 'react';
 import { getNetworkHotspots, getNetworkAlerts } from '../api/config';
 import MapLayer from './MapLayer';
 
+const SEVERITY_ORDER = ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW', 'INFO'];
+
 export default function HotspotsAlerts({ onNavigateToGrid }) {
   const [geoData, setGeoData] = useState(null);
   const [hotspots, setHotspots] = useState([]);
   const [alerts, setAlerts] = useState([]);
+  const [availableSeverities, setAvailableSeverities] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -36,17 +39,28 @@ export default function HotspotsAlerts({ onNavigateToGrid }) {
     try {
       // 179. Add limit and severity filtering.
       const [hotspotsData, alertsData] = await Promise.all([
-        getNetworkHotspots(limit, ''),
-        getNetworkAlerts(limit, severityFilter, '')
+        getNetworkHotspots(500, ''),
+        getNetworkAlerts(500, '', '')
       ]);
-      
-      // If severity filter is applied, also filter hotspots locally (API might not support severity on hotspots directly based on contract, but we can filter it here)
-      const filteredHotspots = severityFilter 
-        ? hotspotsData.filter(h => h.severity === severityFilter)
+
+      const severities = [...new Set([
+        ...hotspotsData.map(item => item.severity),
+        ...alertsData.map(item => item.severity)
+      ])].sort((a, b) => {
+        return (SEVERITY_ORDER.indexOf(a) === -1 ? SEVERITY_ORDER.length : SEVERITY_ORDER.indexOf(a)) -
+          (SEVERITY_ORDER.indexOf(b) === -1 ? SEVERITY_ORDER.length : SEVERITY_ORDER.indexOf(b));
+      });
+      setAvailableSeverities(severities);
+
+      const filteredHotspots = severityFilter
+        ? hotspotsData.filter(item => item.severity === severityFilter)
         : hotspotsData;
+      const filteredAlerts = severityFilter
+        ? alertsData.filter(item => item.severity === severityFilter)
+        : alertsData;
 
       setHotspots(filteredHotspots);
-      setAlerts(alertsData);
+      setAlerts(filteredAlerts);
     } catch (err) {
       setError(err.message || 'Failed to fetch operational data');
     } finally {
@@ -92,6 +106,7 @@ export default function HotspotsAlerts({ onNavigateToGrid }) {
 
   // Sort by activity descending for the table
   combinedItems.sort((a, b) => b.activity - a.activity);
+  const rankedItems = combinedItems.slice(0, limit);
 
   return (
     <div className="hotspots-page">
@@ -111,9 +126,9 @@ export default function HotspotsAlerts({ onNavigateToGrid }) {
             onChange={e => setSeverityFilter(e.target.value)}
           >
             <option value="">All Severities</option>
-            <option value="HIGH">High Priority</option>
-            <option value="ATTENTION">Attention</option>
-            <option value="NORMAL">Normal</option>
+            {availableSeverities.map(severity => (
+              <option key={severity} value={severity}>{severity}</option>
+            ))}
           </select>
         </div>
         <div className="form-group">
@@ -184,14 +199,14 @@ export default function HotspotsAlerts({ onNavigateToGrid }) {
                 </tr>
               </thead>
               <tbody>
-                {combinedItems.length === 0 ? (
+                {rankedItems.length === 0 ? (
                   <tr>
                     <td colSpan="5" style={{ textAlign: 'center', padding: '2rem' }}>
                       No areas found matching current filters.
                     </td>
                   </tr>
                 ) : (
-                  combinedItems.map((item, idx) => (
+                  rankedItems.map((item, idx) => (
                     <tr 
                       key={`${item.type}-${item.grid_id}-${idx}`} 
                       className={`row-severity-${item.severity.toLowerCase()}`}
@@ -208,7 +223,6 @@ export default function HotspotsAlerts({ onNavigateToGrid }) {
                       <td>
                         <span className={`severity-badge badge-${item.severity.toLowerCase()}`}>
                           {item.severity === 'HIGH' && '⚠️ '}
-                          {item.severity === 'ATTENTION' && '👀 '}
                           {item.severity}
                         </span>
                       </td>

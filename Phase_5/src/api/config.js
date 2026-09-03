@@ -3,12 +3,14 @@ export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0
 
 /**
  * Helper function to fetch the high-level network summary.
- * Accepts an optional asOf ISO datetime string.
+ * Accepts optional from/to ISO datetime strings or an as_of timestamp.
  * Returns the parsed JSON response or throws an error.
  */
-export async function getNetworkSummary(asOf = '') {
+export async function getNetworkSummary(fromDt = '', toDt = '', asOf = '') {
   try {
     const params = new URLSearchParams();
+    if (fromDt) params.append('from_dt', fromDt);
+    if (toDt) params.append('to_dt', toDt);
     if (asOf) params.append('as_of', asOf);
     const queryString = params.toString() ? `?${params.toString()}` : '';
     
@@ -35,6 +37,8 @@ export async function getGridActivity(gridId, options = {}) {
     if (options.date) params.append('date', options.date);
     if (options.hour !== undefined && options.hour !== '') params.append('hour', options.hour);
     if (options.as_of) params.append('as_of', options.as_of);
+    if (options.from_dt) params.append('from_dt', options.from_dt);
+    if (options.to_dt) params.append('to_dt', options.to_dt);
 
     const queryString = params.toString() ? `?${params.toString()}` : '';
     const response = await fetch(`${API_BASE_URL}/network/grid/${gridId}${queryString}`);

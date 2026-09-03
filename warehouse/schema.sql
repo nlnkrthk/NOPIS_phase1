@@ -60,5 +60,8 @@ CREATE INDEX idx_fact_grid
 CREATE INDEX idx_fact_time
     ON fact_network_activity(time_key);
 
+CREATE INDEX idx_fact_time_grid_activity
+    ON fact_network_activity(time_key, grid_id, total_activity);
+
 CREATE INDEX idx_dim_time_date
     ON dim_time(date);

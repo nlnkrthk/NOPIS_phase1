@@ -3,6 +3,7 @@ import { getPredictRisk } from '../api/config';
 
 export default function PredictiveRisk() {
   const [gridInput, setGridInput] = useState('4821');
+  const [asOfInput, setAsOfInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [result, setResult] = useState(null);
@@ -19,6 +20,9 @@ export default function PredictiveRisk() {
     try {
       // 183. Submit feature values or a selected grid to POST/network/predict-risk.
       const payload = { grid_id: cleanId };
+      if (asOfInput.trim()) {
+        payload.as_of = asOfInput.trim();
+      }
       const response = await getPredictRisk(payload);
       setResult(response);
     } catch (err) {
@@ -52,6 +56,16 @@ export default function PredictiveRisk() {
                 min="1"
                 max="10000"
                 required
+              />
+            </div>
+            
+            <div className="form-group" style={{ marginTop: '1rem' }}>
+              <label className="search-label">As Of (Optional):</label>
+              <input
+                type="datetime-local"
+                className="grid-search-input"
+                value={asOfInput}
+                onChange={(e) => setAsOfInput(e.target.value)}
               />
             </div>
             

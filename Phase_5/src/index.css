@@ -181,6 +181,34 @@ body {
   flex-wrap: wrap;
 }
 
+.summary-mode-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.25rem;
+  background-color: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 0.375rem;
+}
+
+.summary-mode-button {
+  padding: 0.4rem 0.75rem;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 0.25rem;
+  color: var(--text-secondary);
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.summary-mode-button:hover,
+.summary-mode-button.active {
+  background-color: #2563eb;
+  border-color: #3b82f6;
+  color: #ffffff;
+}
+
 .datetime-input {
   padding: 0.5rem 0.75rem;
   background-color: var(--bg-secondary);
@@ -743,33 +771,53 @@ body {
   border: 1px solid rgba(239, 68, 68, 0.3);
 }
 
-.badge-attention {
-  background-color: rgba(245, 158, 11, 0.15);
-  color: #fbbf24;
-  border: 1px dashed rgba(245, 158, 11, 0.4);
+.badge-critical {
+  background-color: rgba(153, 27, 27, 0.2);
+  color: #fca5a5;
+  border: 1px solid rgba(153, 27, 27, 0.5);
 }
 
-.badge-normal {
+.badge-medium {
+  background-color: rgba(245, 158, 11, 0.15);
+  color: #fbbf24;
+  border: 1px solid rgba(245, 158, 11, 0.4);
+}
+
+.badge-low {
   background-color: rgba(59, 130, 246, 0.15);
   color: #60a5fa;
-  border: 1px solid rgba(59, 130, 246, 0.3);
+  border: 1px dashed rgba(59, 130, 246, 0.3);
+}
+
+.badge-info {
+  background-color: rgba(100, 116, 139, 0.15);
+  color: #cbd5e1;
+  border: 1px dashed rgba(100, 116, 139, 0.4);
+}
+
+.row-severity-critical {
+  border-left: 4px solid #991b1b;
 }
 
 .row-severity-high {
   border-left: 4px solid #ef4444;
 }
 
-.row-severity-attention {
-  border-left: 4px dashed #f59e0b;
+.row-severity-medium {
+  border-left: 4px solid #f59e0b;
 }
 
-.row-severity-normal {
-  border-left: 4px solid #3b82f6;
+.row-severity-low {
+  border-left: 4px dashed #3b82f6;
 }
 
+.row-severity-info { border-left: 4px dashed #64748b; }
+
+.row-severity-critical:hover { background-color: rgba(153, 27, 27, 0.05) !important; }
 .row-severity-high:hover { background-color: rgba(239, 68, 68, 0.05) !important; }
-.row-severity-attention:hover { background-color: rgba(245, 158, 11, 0.05) !important; }
-.row-severity-normal:hover { background-color: rgba(59, 130, 246, 0.05) !important; }
+.row-severity-medium:hover { background-color: rgba(245, 158, 11, 0.05) !important; }
+.row-severity-low:hover { background-color: rgba(59, 130, 246, 0.05) !important; }
+.row-severity-info:hover { background-color: rgba(100, 116, 139, 0.05) !important; }
 
 .alert-icon {
   font-size: 1.5rem;

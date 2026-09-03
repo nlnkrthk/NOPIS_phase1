@@ -54,16 +54,25 @@ router = APIRouter(prefix="/network", tags=["Network"])
 
 # 129. Create GET /network/summary.
 @router.get("/summary", response_model=NetworkSummaryResponse)
-def network_summary(as_of: Optional[datetime] = Query(None, description="Optional ISO datetime reporting timestamp (e.g. YYYY-MM-DDTHH:MM:SS). If omitted, defaults to MAX(timestamp) in analytics.")):
+def network_summary(
+    from_dt: Optional[datetime] = Query(None, description="Optional start datetime (ISO format: YYYY-MM-DDTHH:MM:SS). If omitted, defaults to oldest timestamp in analytics."),
+    to_dt: Optional[datetime] = Query(None, description="Optional end datetime (ISO format: YYYY-MM-DDTHH:MM:SS). If omitted, defaults to MAX(timestamp) in analytics."),
+    as_of: Optional[datetime] = Query(None, description="Optional end datetime for a start-to-as_of summary (ISO format: YYYY-MM-DDTHH:MM:SS).")
+):
     db = SessionLocal()
     try:
-        summary = get_network_summary(db, as_of=as_of)
+        summary = get_network_summary(
+            db,
+            from_dt=from_dt,
+            to_dt=to_dt,
+            as_of=as_of,
+        )
         if summary is None:
             raise HTTPException(
                 status_code=404, 
-                detail="No analytics data found for the requested as_of timestamp"
+                detail="No analytics data found for the requested datetime range"
             )
-        # 134. Return clear 500 errors when the data source is unavailable, and include the effective as_of in every successful response.
+        # 134. Return clear 500 errors when the data source is unavailable, and include the effective datetime range in every successful response.
         return summary
     except HTTPException:
         raise
@@ -86,7 +95,9 @@ def grid_activity(
     grid_id: int = Path(..., description="Grid identifier (valid range: 1–10000)"),
     date: Optional[date] = Query(None, description="Optional date filter (YYYY-MM-DD)"),
     hour: Optional[int] = Query(None, ge=0, le=23, description="Optional hour filter (0-23)"),
-    as_of: Optional[datetime] = Query(None, description="Optional reference as_of timestamp")
+    as_of: Optional[datetime] = Query(None, description="Optional cumulative end timestamp"),
+    from_dt: Optional[datetime] = Query(None, description="Optional inclusive range start timestamp"),
+    to_dt: Optional[datetime] = Query(None, description="Optional inclusive range end timestamp")
 ):
     # 138. Return 404 for an unknown grid — and treat any grid_id outside 1–10000 as unknown.
     if grid_id < 1 or grid_id > 10000:
@@ -102,7 +113,9 @@ def grid_activity(
             grid_id=grid_id, 
             filter_date=date, 
             filter_hour=hour, 
-            as_of=as_of
+            as_of=as_of,
+            from_dt=from_dt,
+            to_dt=to_dt,
         )
         if activity is None:
             raise HTTPException(

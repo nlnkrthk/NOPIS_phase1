@@ -13,10 +13,25 @@ try:
 except ModuleNotFoundError:
     from routers.network import router as network_router
 
+from contextlib import asynccontextmanager
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Trigger model loading
+    try:
+        from Phase_4 import ml5_model_service
+        # Accessing MODEL verifies it loaded successfully
+        _ = ml5_model_service.MODEL
+    except ModuleNotFoundError:
+        import ml5_model_service
+        _ = ml5_model_service.MODEL
+    yield
+
 app = FastAPI(
     title="NOPIS Phase 4 — Network Operations Predictive Intelligence System API",
     description="REST API for querying analytics metrics and network summaries from the telecom warehouse.",
-    version="1.0.0"
+    version="1.0.0",
+    lifespan=lifespan
 )
 
 # 162. Configure CORS on FastAPI.
