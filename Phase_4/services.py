@@ -420,7 +420,45 @@ def get_alerts(
 # 146. Return the exact ML2 feature set: avg_activity, activity_growth, active_hours, peak_ratio, variability, internet_share, plus feature_timestamp.
 # 148. Return data-quality status and feature freshness alongside the values.
 # The API reads stored features; no feature engineering arithmetic is performed here.
-def get_grid_features(db: Session, grid_id: int) -> Optional[dict]:
+def get_grid_features(db: Session, grid_id: int, as_of: Optional[datetime] = None) -> Optional[dict]:
+    if as_of is not None:
+        effective_as_of = as_of.replace(minute=0, second=0, microsecond=0)
+        activity_rows = db.execute(text("""
+            SELECT t.timestamp, f.total_activity, f.internet_activity
+            FROM fact_network_activity f
+            JOIN dim_time t ON f.time_key = t.time_key
+            WHERE f.grid_id = :grid_id AND t.timestamp <= :as_of
+            ORDER BY t.timestamp DESC
+            LIMIT 24
+        """), {"grid_id": grid_id, "as_of": effective_as_of}).mappings().all()
+        if not activity_rows:
+            return None
+
+        activities = [float(row["total_activity"] or 0.0) for row in reversed(activity_rows)]
+        internet_activities = [float(row["internet_activity"] or 0.0) for row in reversed(activity_rows)]
+        count = len(activities)
+        average = sum(activities) / count
+        variance = sum((value - average) ** 2 for value in activities) / count
+        midpoint = count // 2
+        first_half = sum(activities[:midpoint]) / midpoint if midpoint else average
+        second_half = sum(activities[midpoint:]) / (count - midpoint) if count - midpoint else average
+        total_activity = sum(activities)
+        feature_timestamp = activity_rows[0]["timestamp"]
+
+        return {
+            "grid_id": grid_id,
+            "feature_timestamp": feature_timestamp,
+            "avg_activity": average,
+            "activity_growth": (second_half - first_half) / (first_half + 1e-5),
+            "active_hours": sum(value > 0 for value in activities),
+            "peak_ratio": max(activities) / (average + 1e-5),
+            "variability": (variance ** 0.5) / (average + 1e-5),
+            "internet_share": sum(internet_activities) / (total_activity + 1e-5) if total_activity > 0 else 0.0,
+            "data_quality_status": "VALID" if count >= 20 else "PARTIAL",
+            "freshness_hours": 0.0,
+            "is_fresh": count >= 20,
+        }
+
     query_sql = text("""
         SELECT 
             grid_id,
@@ -475,7 +513,7 @@ def predict_grid_risk(db: Session, request_data: Any) -> Optional[dict]:
     if not grid_exists:
         return None
 
-    # Resolve features (request overrides take precedence over stored features)
+    # Resolve features (request overrides take precedence over timestamped features)
     req_features = {
         "avg_activity": request_data.avg_activity,
         "activity_growth": request_data.activity_growth,
@@ -487,12 +525,15 @@ def predict_grid_risk(db: Session, request_data: Any) -> Optional[dict]:
 
     # If any feature is missing, fetch from grid_features
     if any(v is None for v in req_features.values()):
-        feat_row = db.execute(
-            text("""SELECT avg_activity, activity_growth, active_hours, 
-                           peak_ratio, variability, internet_share 
-                    FROM grid_features WHERE grid_id = :grid_id LIMIT 1"""), 
-            {"grid_id": grid_id}
-        ).mappings().first()
+        if request_data.as_of is not None:
+            feat_row = get_grid_features(db, grid_id, request_data.as_of)
+        else:
+            feat_row = db.execute(
+                text("""SELECT avg_activity, activity_growth, active_hours, 
+                               peak_ratio, variability, internet_share 
+                        FROM grid_features WHERE grid_id = :grid_id LIMIT 1"""), 
+                {"grid_id": grid_id}
+            ).mappings().first()
         
         if feat_row:
             for k in req_features:
@@ -523,7 +564,11 @@ def predict_grid_risk(db: Session, request_data: Any) -> Optional[dict]:
     ]
 
     # Model inference
-    risk_score = ml5_model_service.predict(feature_vector)
+    model_version = request_data.model_version or ml5_model_service.MODEL_VERSION
+    try:
+        risk_score = ml5_model_service.predict(feature_vector, model_version)
+    except ValueError as error:
+        raise HTTPException(status_code=422, detail=str(error)) from error
     
     if risk_score >= 0.75:
         risk_level = "CRITICAL"
@@ -544,11 +589,11 @@ def predict_grid_risk(db: Session, request_data: Any) -> Optional[dict]:
     ).mappings().first()
 
     # Get top feature contribution
-    top_features = ml5_model_service.get_feature_contributions()
+    top_features = ml5_model_service.get_feature_contributions(model_version)
     top_feature_name, top_feature_val = top_features[0]
 
     explanation = (
-        f"Real ML prediction using {ml5_model_service.MODEL_VERSION}. "
+        f"Real ML prediction using {model_version}. "
         f"Most influential feature: {top_feature_name} (weight: {top_feature_val:.3f})."
     )
     if anomaly_row:
@@ -563,7 +608,7 @@ def predict_grid_risk(db: Session, request_data: Any) -> Optional[dict]:
         "grid_id": grid_id,
         "risk_score": float(risk_score),
         "risk_level": risk_level,
-        "model_version": ml5_model_service.MODEL_VERSION,
+        "model_version": model_version,
         "prediction_timestamp": prediction_time,
         "explanation_note": explanation,
         "is_stub": False

@@ -88,6 +88,7 @@ class PredictRiskRequest(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     grid_id: int = Field(..., ge=1, le=10000, description="Grid identifier (valid range: 1–10000)")
+    model_version: Optional[str] = Field(None, description="Optional model version from the model catalog")
     as_of: Optional[datetime] = Field(None, description="Optional reporting reference timestamp")
     avg_activity: Optional[float] = Field(None, ge=0.0, description="Optional feature: average activity")
     activity_growth: Optional[float] = Field(None, description="Optional feature: activity growth rate")
@@ -107,5 +108,10 @@ class PredictRiskResponse(BaseModel):
     prediction_timestamp: datetime = Field(..., description="Timestamp when prediction was evaluated")
     explanation_note: str = Field(..., description="Human-readable explanation of risk assessment and anomaly context")
     is_stub: bool = Field(False, description="Boolean flag indicating whether response is from a stub implementation")
+
+class AvailableModelResponse(BaseModel):
+    model_version: str
+    model_type: str
+    features: List[str]
 
 

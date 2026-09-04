@@ -20,7 +20,8 @@ try:
         AlertItem, 
         GridFeaturesResponse,
         PredictRiskRequest,
-        PredictRiskResponse
+        PredictRiskResponse,
+        AvailableModelResponse
     )
     from Phase_4.services import (
         get_network_summary, 
@@ -39,7 +40,8 @@ except ModuleNotFoundError:
         AlertItem, 
         GridFeaturesResponse,
         PredictRiskRequest,
-        PredictRiskResponse
+        PredictRiskResponse,
+        AvailableModelResponse
     )
     from services import (
         get_network_summary, 
@@ -188,7 +190,8 @@ def network_alerts(
 # 145. Create GET /network/grid/{grid_id}/features.
 @router.get("/grid/{grid_id}/features", response_model=GridFeaturesResponse)
 def grid_features(
-    grid_id: int = Path(..., description="Grid identifier to fetch ML-ready feature vector")
+    grid_id: int = Path(..., description="Grid identifier to fetch ML-ready feature vector"),
+    as_of: Optional[datetime] = Query(None, description="Feature window end timestamp")
 ):
     if grid_id < 1 or grid_id > 10000:
         raise HTTPException(
@@ -198,7 +201,7 @@ def grid_features(
 
     db = SessionLocal()
     try:
-        features = get_grid_features(db=db, grid_id=grid_id)
+        features = get_grid_features(db=db, grid_id=grid_id, as_of=as_of)
         if features is None:
             raise HTTPException(
                 status_code=404,
@@ -254,4 +257,12 @@ def predict_risk(request: PredictRiskRequest):
         )
     finally:
         db.close()
+
+@router.get("/models", response_model=List[AvailableModelResponse])
+def available_models():
+    try:
+        from Phase_4 import ml5_model_service
+    except ModuleNotFoundError:
+        import ml5_model_service
+    return ml5_model_service.get_available_models()
 

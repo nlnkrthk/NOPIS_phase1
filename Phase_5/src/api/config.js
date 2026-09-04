@@ -59,6 +59,16 @@ export async function getGridActivity(gridId, options = {}) {
   }
 }
 
+export async function getGridFeatures(gridId, asOf) {
+  const params = asOf ? `?as_of=${encodeURIComponent(asOf)}` : '';
+  const response = await fetch(`${API_BASE_URL}/network/grid/${gridId}/features${params}`);
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(errorData.detail || `Grid features request failed: ${response.status}`);
+  }
+  return response.json();
+}
+
 // 176. Call /network/hotspots and /network/alerts.
 export async function getNetworkHotspots(limit = 10, asOf = '') {
   const params = new URLSearchParams({ limit });
@@ -91,4 +101,10 @@ export async function getPredictRisk(payload) {
     throw new Error(err.detail || `Predict risk request failed: ${response.status}`);
   }
   return response.json(); // expected { risk_score, risk_level, model_version }
+}
+
+export async function getAvailableModels() {
+  const response = await fetch(`${API_BASE_URL}/network/models`);
+  if (!response.ok) throw new Error(`Failed to fetch available models: ${response.status}`);
+  return response.json();
 }
