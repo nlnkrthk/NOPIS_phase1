@@ -16,7 +16,10 @@ from Phase_4.services import (
     get_grid_features,
     predict_grid_risk
 )
-from Phase_4.claude_insight_service import _active_provider, ANTHROPIC_MODEL, NVIDIA_MODEL, NVIDIA_BASE_URL
+try:
+    from Phase_7.c_tasks.claude_insight_service import _active_provider, ANTHROPIC_MODEL, NVIDIA_MODEL, NVIDIA_BASE_URL
+except ModuleNotFoundError:
+    from claude_insight_service import _active_provider, ANTHROPIC_MODEL, NVIDIA_MODEL, NVIDIA_BASE_URL
 from sqlalchemy import text
 
 # 240. Collect the current grid metrics, recent history, prior alerts, model score and pipeline quality status from DE7 and API6.

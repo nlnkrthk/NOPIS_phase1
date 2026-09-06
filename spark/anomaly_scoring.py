@@ -43,16 +43,24 @@ from sqlalchemy import create_engine, text
 
 logger = logging.getLogger(__name__)
 
-# Same warehouse as Phase_4 API and ml/features.py.
-DATABASE_URL = "mysql+pymysql://root:root@localhost/nopis"
+# Use the same warehouse target as the ETL loader. Override this in Airflow
+# with NOPIS_DATABASE_URL when the deployment uses different credentials.
+DATABASE_URL = os.environ.get(
+    "NOPIS_DATABASE_URL",
+    "mysql+pymysql://root:root@localhost:3306/nopis",
+)
 
 _ACTIVITY_QUERY = """
 SELECT
     f.grid_id,
     t.timestamp,
-    f.total_activity
+    f.total_activity,
+    CASE WHEN s.grid_id IS NULL THEN 1 ELSE 0 END AS is_new
 FROM fact_network_activity f
 JOIN dim_time t ON f.time_key = t.time_key
+LEFT JOIN network_anomaly_scores s
+    ON s.grid_id = f.grid_id
+   AND s.feature_timestamp = t.timestamp
 ORDER BY f.grid_id, t.timestamp
 """
 
@@ -66,7 +74,8 @@ CREATE TABLE IF NOT EXISTS network_anomaly_scores (
     anomaly_score DOUBLE,
     direction VARCHAR(10),
     anomaly_flag BOOLEAN,
-    reason TEXT
+    reason TEXT,
+    UNIQUE KEY uq_network_anomaly_grid_timestamp (grid_id, feature_timestamp)
 )
 """
 
@@ -117,6 +126,7 @@ def score_anomalies(
     value_column="total_activity",
     high_threshold=HIGH_THRESHOLD,
     low_threshold=LOW_THRESHOLD,
+    incremental=True,
 ) -> DataFrame:
     """
     Score each (grid_id, timestamp) row against its hour-of-day median baseline.
@@ -154,6 +164,9 @@ def score_anomalies(
         value_column=value_column,
         statistic="median",
     )
+
+    if incremental and "is_new" in scored.columns:
+        scored = scored.filter(col("is_new") == lit(1))
 
     scored = scored.join(baseline_df, on=["grid_id", "hour"], how="left")
 
@@ -238,6 +251,19 @@ def _get_engine():
     )
 
 
+def _ensure_scores_table(engine):
+    with engine.begin() as conn:
+        conn.execute(text(_CREATE_SCORES_TABLE))
+        try:
+            conn.execute(text(
+                "ALTER TABLE network_anomaly_scores "
+                "ADD UNIQUE KEY uq_network_anomaly_grid_timestamp "
+                "(grid_id, feature_timestamp)"
+            ))
+        except Exception:
+            pass
+
+
 def fetch_activity_from_warehouse(spark) -> DataFrame:
     """
     Load canonical-grain activity from MySQL into a Spark DataFrame.
@@ -247,8 +273,11 @@ def fetch_activity_from_warehouse(spark) -> DataFrame:
     """
     logger.info("Reading fact_network_activity JOIN dim_time from warehouse")
     engine = _get_engine()
-    activity_pdf = pd.read_sql_query(_ACTIVITY_QUERY, engine)
-    engine.dispose()
+    try:
+        _ensure_scores_table(engine)
+        activity_pdf = pd.read_sql_query(_ACTIVITY_QUERY, engine)
+    finally:
+        engine.dispose()
 
     if activity_pdf.empty:
         raise ValueError(
@@ -284,7 +313,8 @@ def write_anomaly_scores(scored_df: DataFrame) -> int:
     scores_pdf = pd.read_parquet(tmp_path)
 
     if scores_pdf.empty:
-        raise ValueError("Scored DataFrame is empty; warehouse table was not changed.")
+        logger.info("No unscored activity rows found; anomaly table is unchanged.")
+        return 0
 
     scores_pdf["anomaly_flag"] = scores_pdf["anomaly_flag"].astype(bool)
     row_count = len(scores_pdf)
@@ -292,23 +322,49 @@ def write_anomaly_scores(scored_df: DataFrame) -> int:
 
     engine = _get_engine()
     try:
+        _ensure_scores_table(engine)
+        score_insert = text("""
+            INSERT INTO network_anomaly_scores
+                (grid_id, feature_timestamp, current_value, baseline_value,
+                 deviation, anomaly_score, direction, anomaly_flag, reason)
+            VALUES
+                (:grid_id, :feature_timestamp, :current_value, :baseline_value,
+                 :deviation, :anomaly_score, :direction, :anomaly_flag, :reason)
+            ON DUPLICATE KEY UPDATE
+                current_value = VALUES(current_value),
+                baseline_value = VALUES(baseline_value),
+                deviation = VALUES(deviation),
+                anomaly_score = VALUES(anomaly_score),
+                direction = VALUES(direction),
+                anomaly_flag = VALUES(anomaly_flag),
+                reason = VALUES(reason)
+        """)
         with engine.begin() as conn:
-            conn.execute(text(_CREATE_SCORES_TABLE))
-            conn.execute(text("TRUNCATE TABLE network_anomaly_scores"))
-
-        scores_pdf.to_sql(
-            "network_anomaly_scores",
-            con=engine,
-            if_exists="append",
-            index=False,
-            chunksize=10000,
-            method="multi",
-        )
+            for start in range(0, len(scores_pdf), 5000):
+                records = [
+                    {str(key): value for key, value in record.items()}
+                    for record in scores_pdf.iloc[start:start + 5000]
+                    .to_dict("records")
+                ]
+                conn.execute(
+                    score_insert,
+                    records,
+                )
     finally:
         engine.dispose()
 
     logger.info("network_anomaly_scores stored successfully (%d rows)", row_count)
     return row_count
+
+
+def _create_spark_session():
+    """Create the configured local Spark session in either launch mode."""
+    if __package__:
+        from .spark_session import create_spark_session
+    else:
+        from spark_session import create_spark_session
+
+    return create_spark_session(app_name="NOPIS_Anomaly_Scoring")
 
 
 def run_from_warehouse(spark=None) -> int:
@@ -317,8 +373,7 @@ def run_from_warehouse(spark=None) -> int:
     """
     own_session = spark is None
     if own_session:
-        from spark.spark_session import create_spark_session
-        spark = create_spark_session(app_name="NOPIS_Anomaly_Scoring")
+        spark = _create_spark_session()
 
     try:
         activity_df = fetch_activity_from_warehouse(spark)

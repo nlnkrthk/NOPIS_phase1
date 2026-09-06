@@ -201,8 +201,10 @@ Separate observed evidence from interpretation.
 Do not invent numbers or unsupported root causes.
 """
 
-def call_claude(messages: list) -> str:
-    from Phase_4.claude_insight_service import _active_provider, ANTHROPIC_MODEL, NVIDIA_MODEL, NVIDIA_BASE_URL
+    try:
+        from Phase_7.c_tasks.claude_insight_service import _active_provider, ANTHROPIC_MODEL, NVIDIA_MODEL, NVIDIA_BASE_URL
+    except ModuleNotFoundError:
+        from claude_insight_service import _active_provider, ANTHROPIC_MODEL, NVIDIA_MODEL, NVIDIA_BASE_URL
     provider = _active_provider()
     
     # 238. Return evidence references in the final assistant response, naming which tool produced each figure.

@@ -18,11 +18,16 @@ import sys
 try:
     from Phase_4.database import SessionLocal
     from Phase_4.services import get_evidence_object
-    from Phase_4.claude_insight_service import generate_insight
+    from Phase_7.c_tasks.claude_insight_service import generate_insight
 except ModuleNotFoundError:
-    from database import SessionLocal
-    from services import get_evidence_object
-    from claude_insight_service import generate_insight
+    try:
+        from database import SessionLocal
+        from services import get_evidence_object
+        from claude_insight_service import generate_insight
+    except ModuleNotFoundError:
+        from Phase_4.database import SessionLocal
+        from Phase_4.services import get_evidence_object
+        from claude_insight_service import generate_insight
 
 OUTPUT_DIR = os.path.join(os.path.dirname(__file__), "output")
 

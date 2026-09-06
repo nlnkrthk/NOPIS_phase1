@@ -1,0 +1,38 @@
+{
+  "_comment": "299. Package them into a project or team plugin.",
+  "name": "network-engineering",
+  "version": "1.0.0",
+  "description": "Network Engineering Claude Plugin for NOPIS: Standardizes rules, skills, commands, hooks, and approved MCP configuration across telecom network engineering teams.",
+  "author": "NOPIS Core Engineering Team",
+  "license": "Internal",
+  "keywords": [
+    "telecom",
+    "network-operations",
+    "nopis",
+    "claude-plugin",
+    "mcp",
+    "data-quality",
+    "anomaly-detection"
+  ],
+  "components": {
+    "rules": "rules/rules.md",
+    "commands": "commands/",
+    "skills": "skills/",
+    "hooks": "hooks/hooks.json",
+    "mcp": "mcp/mcp_config.json"
+  },
+  "environment": {
+    "required_vars": [
+      "NOPIS_API_BASE_URL"
+    ],
+    "optional_vars": [
+      "NOPIS_WAREHOUSE_HOST",
+      "NOPIS_WAREHOUSE_PORT"
+    ]
+  },
+  "compatibility": {
+    "claude_code": ">=1.0.0",
+    "python": ">=3.10",
+    "mcp": ">=2.0.0"
+  }
+}

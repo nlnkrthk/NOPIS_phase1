@@ -33,8 +33,10 @@ All paths can also be supplied via a JSON config file::
 """
 
 import argparse
+import inspect
 import json
 import logging
+import os
 from pathlib import Path
 import sys
 import time
@@ -76,12 +78,12 @@ def _setup_logging():
     )
 
 
-def load_warehouse():
+def load_warehouse(parquet_path):
     """Load the successful Spark output into the SQL warehouse."""
     from warehouse.load_warehouse import load_dim_grid, load_activity_data
 
     load_dim_grid()
-    load_activity_data()
+    load_activity_data(parquet_path=parquet_path, replace=False)
 
 
 # ═════════════════════════════════════════════════════════════════
@@ -249,6 +251,17 @@ def main():
             landing_summary["rejected"],
         )
 
+        landing_details = landing_summary.get("details")
+        new_raw_files = [
+            detail["raw_path"]
+            for detail in landing_details or []
+            if detail["status"] == "VALID" and detail.get("newly_routed")
+        ]
+        if landing_details is not None and not new_raw_files:
+            logger.info("No new valid landing files; incremental run is complete.")
+            status = "SUCCESS"
+            return
+
         # ── 2. Create Spark session ──────────────────────────────
         logger.info("Stage 2/6 — Creating Spark session")
         spark = create_spark_session(
@@ -257,7 +270,11 @@ def main():
 
         # ── 3. Ingest raw data from raw folder ───────────────────
         logger.info("Stage 3/6 — Ingestion (read_raw from %s)", paths["raw"])
-        raw_df = read_raw(spark, paths["raw"])
+        raw_df = read_raw(
+            spark,
+            paths["raw"],
+            files=new_raw_files if landing_details is not None else None,
+        )
         input_rows = raw_df.count()
 
         # ── 4. Clean and standardize ─────────────────────────────
@@ -278,15 +295,34 @@ def main():
 
         # ── 6b. Write outputs ───────────────────────────────────
         logger.info("Stage 6b/6 — Writing outputs")
-        output_rows = write_outputs(
-            enriched_df,
-            processed_path=paths["processed"],
-            analytics_path=paths["analytics"],
+        writer_kwargs = {
+            "processed_path": paths["processed"],
+            "analytics_path": paths["analytics"],
+        }
+        if "incremental" in inspect.signature(write_outputs).parameters:
+            writer_kwargs["incremental"] = True
+        output_rows = write_outputs(enriched_df, **writer_kwargs)
+
+        warehouse_staging_path = os.path.join(
+            paths["processed"], "_incremental_warehouse_input"
         )
+        enriched_df.select(
+            "timestamp",
+            "grid_id",
+            "sms_in",
+            "sms_out",
+            "call_in",
+            "call_out",
+            "internet_activity",
+            "total_sms",
+            "total_calls",
+            "total_activity",
+            "internet_share",
+        ).write.mode("overwrite").parquet(warehouse_staging_path)
 
         # ── 6c. Load the complete output into MySQL ─────────────
         logger.info("Stage 6c/6 — Loading SQL warehouse")
-        load_warehouse()
+        load_warehouse(warehouse_staging_path)
 
         status = "SUCCESS"
 

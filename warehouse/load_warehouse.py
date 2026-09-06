@@ -1,4 +1,5 @@
 import json
+import os
 import pandas as pd
 from sqlalchemy import create_engine, text
 
@@ -7,7 +8,10 @@ from sqlalchemy import create_engine, text
 # Configuration
 # ================================================================
 
-DATABASE_URL = "mysql+pymysql://root:root@10.162.142.34:3306/nopis"
+DATABASE_URL = os.environ.get(
+    "NOPIS_DATABASE_URL",
+    "mysql+pymysql://root:root@localhost:3306/nopis",
+)
 GEOJSON_PATH = "/mnt/d/NOPIS/data/reference/milano-grid.geojson"
 PARQUET_PATH = "/mnt/d/NOPIS/data/processed/enriched_hourly_grid"
 
@@ -16,7 +20,11 @@ PARQUET_PATH = "/mnt/d/NOPIS/data/processed/enriched_hourly_grid"
 # MySQL connection
 # ================================================================
 
-engine = create_engine(DATABASE_URL)
+engine = create_engine(
+    DATABASE_URL,
+    connect_args={"connect_timeout": 10},
+    pool_pre_ping=True,
+)
 
 
 # ================================================================
@@ -96,11 +104,11 @@ def load_dim_grid():
 # from Spark output.
 # ================================================================
 
-def load_activity_data():
+def load_activity_data(parquet_path=PARQUET_PATH, replace=True):
 
     print("Reading Spark Parquet output...")
 
-    df = pd.read_parquet(PARQUET_PATH)
+    df = pd.read_parquet(parquet_path)
 
     print(
         f"Parquet rows: {len(df)}"
@@ -108,13 +116,12 @@ def load_activity_data():
 
     expected_fact_rows = len(df)
 
-    # Refresh both tables with metadata-only truncation. A row-by-row DELETE
-    # holds millions of locks and can exceed MySQL's lock wait timeout.
-    with engine.connect() as conn:
-        conn.execute(text("SET FOREIGN_KEY_CHECKS = 0"))
-        conn.execute(text("TRUNCATE TABLE fact_network_activity"))
-        conn.execute(text("TRUNCATE TABLE dim_time"))
-        conn.execute(text("SET FOREIGN_KEY_CHECKS = 1"))
+    if replace:
+        with engine.begin() as conn:
+            conn.execute(text("SET FOREIGN_KEY_CHECKS = 0"))
+            conn.execute(text("TRUNCATE TABLE fact_network_activity"))
+            conn.execute(text("TRUNCATE TABLE dim_time"))
+            conn.execute(text("SET FOREIGN_KEY_CHECKS = 1"))
 
     # ------------------------------------------------------------
     # Create timestamp
@@ -165,14 +172,14 @@ def load_activity_data():
     )
 
     if not dim_time_df.empty:
-
-        dim_time_df.to_sql(
-            "dim_time",
-            engine,
-            if_exists="append",
-            index=False,
-            chunksize=1000
-        )
+        time_insert = text("""
+            INSERT IGNORE INTO dim_time
+                (time_key, timestamp, date, hour, day, month, year)
+            VALUES
+                (:time_key, :timestamp, :date, :hour, :day, :month, :year)
+        """)
+        with engine.begin() as conn:
+            conn.execute(time_insert, dim_time_df.to_dict("records"))
 
     print("dim_time loaded.")
 
@@ -208,14 +215,32 @@ def load_activity_data():
     )
 
     if not fact_df.empty:
-
-        fact_df.to_sql(
-            "fact_network_activity",
-            engine,
-            if_exists="append",
-            index=False,
-            chunksize=5000
-        )
+        fact_insert = text("""
+            INSERT INTO fact_network_activity
+                (grid_id, time_key, sms_in, sms_out, call_in, call_out,
+                 internet_activity, total_sms, total_calls, total_activity,
+                 internet_share)
+            VALUES
+                (:grid_id, :time_key, :sms_in, :sms_out, :call_in, :call_out,
+                 :internet_activity, :total_sms, :total_calls, :total_activity,
+                 :internet_share)
+            ON DUPLICATE KEY UPDATE
+                sms_in = VALUES(sms_in),
+                sms_out = VALUES(sms_out),
+                call_in = VALUES(call_in),
+                call_out = VALUES(call_out),
+                internet_activity = VALUES(internet_activity),
+                total_sms = VALUES(total_sms),
+                total_calls = VALUES(total_calls),
+                total_activity = VALUES(total_activity),
+                internet_share = VALUES(internet_share)
+        """)
+        with engine.begin() as conn:
+            for start in range(0, len(fact_df), 5000):
+                conn.execute(
+                    fact_insert,
+                    fact_df.iloc[start:start + 5000].to_dict("records"),
+                )
 
         print(
             f"fact_network_activity loaded: {len(fact_df)} new rows"
@@ -226,7 +251,7 @@ def load_activity_data():
                 text("SELECT COUNT(*) FROM fact_network_activity")
             ).scalar()
 
-        if actual_fact_rows != expected_fact_rows:
+        if replace and actual_fact_rows != expected_fact_rows:
             raise RuntimeError(
                 "fact_network_activity row-count mismatch: "
                 f"expected {expected_fact_rows}, found {actual_fact_rows}"

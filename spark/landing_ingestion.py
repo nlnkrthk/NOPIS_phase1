@@ -357,7 +357,7 @@ def route_file(
             destination
         )
 
-        return destination
+        return destination, False
 
     # ------------------------------------------------------------
     # Move file
@@ -376,7 +376,7 @@ def route_file(
         reason
     )
 
-    return destination
+    return destination, True
 
 # 84. Write ingestion metadata for every file seen:
 #     filename, status, row_count, reason, processed_at.
@@ -504,7 +504,7 @@ def process_landing(
             reason = f"Unable to read CSV: {exc}"
             logger.error("%s | %s", file.name, reason)
 
-            route_file(
+            raw_destination, newly_routed = route_file(
                 file,
                 raw_path,
                 rejected_path,
@@ -524,6 +524,8 @@ def process_landing(
                 "status": "INVALID",
                 "row_count": row_count,
                 "reason": reason,
+                "raw_path": str(raw_destination),
+                "newly_routed": newly_routed,
             })
             continue
 
@@ -532,7 +534,7 @@ def process_landing(
         # --------------------------------------------------------
         schema_valid, schema_reason = validate_schema(file)
         if not schema_valid:
-            route_file(
+            raw_destination, newly_routed = route_file(
                 file,
                 raw_path,
                 rejected_path,
@@ -552,6 +554,8 @@ def process_landing(
                 "status": "INVALID",
                 "row_count": row_count,
                 "reason": schema_reason,
+                "raw_path": str(raw_destination),
+                "newly_routed": newly_routed,
             })
             continue
 
@@ -560,7 +564,7 @@ def process_landing(
         # --------------------------------------------------------
         quality_valid, quality_reason = validate_minimum_quality(file)
         if not quality_valid:
-            route_file(
+            raw_destination, newly_routed = route_file(
                 file,
                 raw_path,
                 rejected_path,
@@ -580,13 +584,15 @@ def process_landing(
                 "status": "INVALID",
                 "row_count": row_count,
                 "reason": quality_reason,
+                "raw_path": str(raw_destination),
+                "newly_routed": newly_routed,
             })
             continue
 
         # --------------------------------------------------------
         # 4. File passed all validation -> Route to raw
         # --------------------------------------------------------
-        route_file(
+        raw_destination, newly_routed = route_file(
             file,
             raw_path,
             rejected_path,
@@ -606,6 +612,8 @@ def process_landing(
             "status": "VALID",
             "row_count": row_count,
             "reason": "All validation checks passed",
+            "raw_path": str(raw_destination),
+            "newly_routed": newly_routed,
         })
 
     summary = {
@@ -622,4 +630,4 @@ def process_landing(
         summary["rejected"],
     )
 
-    return summary
+    return summary

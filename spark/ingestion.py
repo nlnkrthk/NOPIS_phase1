@@ -33,7 +33,7 @@ RAW_SCHEMA = StructType([
 CSV_GLOB_PATTERN = "sms-call-internet-mi-*.csv"
 
 
-def read_raw(spark, input_path):
+def read_raw(spark, input_path, files=None):
     """
     Read all raw telecom CSV files from *input_path*.
 
@@ -55,9 +55,12 @@ def read_raw(spark, input_path):
     """
     data_folder = Path(input_path)
 
-    files = sorted(
-        str(f) for f in data_folder.glob(CSV_GLOB_PATTERN)
-    )
+    if files is None:
+        files = sorted(
+            str(f) for f in data_folder.glob(CSV_GLOB_PATTERN)
+        )
+    else:
+        files = sorted(str(Path(file)) for file in files)
 
     # ── Fail loudly when there is nothing to process (task #72) ─────
     if not files:

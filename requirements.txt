@@ -42,3 +42,8 @@ anthropic>=1.4.0
 # Temporary stand-in provider (NVIDIA NIM, OpenAI-compatible) until the real
 # Claude API key is available — see Phase_4/claude_insight_service.py.
 openai>=3.0.0
+
+# --- MCP Server (C12) ---
+# Model Context Protocol library. Powers Phase_7/mcp_server.py.
+# [cli] extra includes typer and rich for the mcp dev/inspect tools.
+mcp[cli]>=2.0.0

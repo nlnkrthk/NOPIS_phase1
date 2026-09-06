@@ -1,0 +1,7 @@
+{
+  "python.analysis.extraPaths": [
+    "${workspaceFolder}/.claude",
+    "${workspaceFolder}/Phase_7",
+    "${workspaceFolder}/Phase_7/c_tasks"
+  ]
+}

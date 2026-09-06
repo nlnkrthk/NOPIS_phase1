@@ -36,7 +36,13 @@ try:
         get_evidence_object,
         get_rising_grids
     )
-    from Phase_4.claude_insight_service import generate_insight, current_model_name
+    try:
+        from Phase_7.c_tasks.claude_insight_service import generate_insight, current_model_name
+    except ModuleNotFoundError:
+        try:
+            from Phase_4.claude_insight_service import generate_insight, current_model_name
+        except ModuleNotFoundError:
+            from claude_insight_service import generate_insight, current_model_name
 except ModuleNotFoundError:
     from database import SessionLocal
     from schemas import (
@@ -62,7 +68,13 @@ except ModuleNotFoundError:
         get_evidence_object,
         get_rising_grids
     )
-    from claude_insight_service import generate_insight, current_model_name
+    try:
+        from Phase_7.c_tasks.claude_insight_service import generate_insight, current_model_name
+    except ModuleNotFoundError:
+        try:
+            from Phase_4.claude_insight_service import generate_insight, current_model_name
+        except ModuleNotFoundError:
+            from claude_insight_service import generate_insight, current_model_name
 
 router = APIRouter(prefix="/network", tags=["Network"])
 
@@ -367,3 +379,28 @@ def grid_insight(
         "model": current_model_name(),
     }
 
+
+# C12 — Task 293. GET /pipeline/status (read-only).
+# Exposes the existing check_pipeline() function from project_commands.py
+# as a REST endpoint so the MCP layer can call the API instead of importing
+# project_commands directly. No new business logic is added here.
+@router.get("/pipeline/status")
+def pipeline_status():
+    """Return the pipeline health status: ingestion log, rejected file count,
+    and warehouse freshness. Read-only. Calls the existing check_pipeline()
+    function from project_commands — no new logic is added here."""
+    try:
+        from Phase_7.c_tasks.project_commands import check_pipeline
+    except ModuleNotFoundError:
+        try:
+            from Phase_4.project_commands import check_pipeline
+        except ModuleNotFoundError:
+            from project_commands import check_pipeline
+
+    try:
+        result = check_pipeline()
+        return result
+    except SQLAlchemyError:
+        raise HTTPException(status_code=500, detail="Database unavailable")
+    except Exception:
+        raise HTTPException(status_code=500, detail="Internal server error")

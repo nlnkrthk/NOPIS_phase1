@@ -1,0 +1,98 @@
+NOPIS Airflow DAG — How to Run from UI
+Step 1: Open WSL
+
+Open your Ubuntu/WSL terminal.
+
+Step 2: Activate the Airflow virtual environment
+source /home/nalinkarthik/airflow-env/bin/activate
+
+You should see:
+
+(airflow-env) nalinkarthik@C8LAP1777:~$
+Step 3: Tell Airflow where your DAG files are
+export AIRFLOW__CORE__DAGS_FOLDER=/mnt/d/NOPIS/Phase_3/AirFlow_Practice/dags
+
+This is important because your DAG file is located in:
+
+/mnt/d/NOPIS/Phase_3/AirFlow_Practice/dags
+Step 4: Verify that Airflow can detect the DAG
+airflow dags list | grep nopis
+
+You should see:
+
+nopis_telecom_pipeline
+
+Optional: verify the tasks:
+
+airflow tasks list nopis_telecom_pipeline
+
+You should see:
+
+run_telecom_pipeline
+run_anomaly_scoring
+Step 5: Start Airflow
+
+Run:
+
+airflow standalone
+
+⚠️ Keep this terminal open.
+
+Airflow needs to continue running for the UI and scheduler to work.
+
+Step 6: Open Airflow UI
+
+Open your Windows browser and go to:
+
+Airflow UI
+
+Step 7: Find your DAG
+
+In the Airflow UI, find:
+
+nopis_telecom_pipeline
+
+Make sure it is not paused.
+
+If it is paused, enable/unpause it.
+
+Step 8: Run the DAG
+Click on nopis_telecom_pipeline
+Click ▶ Trigger DAG
+Confirm the trigger
+Go to Grid view
+Step 9: Monitor the tasks
+
+Your DAG runs in this order:
+
+run_telecom_pipeline
+        ↓
+run_anomaly_scoring
+
+Expected status:
+
+Queued
+   ↓
+Running
+   ↓
+Success
+
+Once the first task succeeds, the second task starts.
+
+Every Time You Want to Run It
+
+The minimum commands are:
+
+source /home/nalinkarthik/airflow-env/bin/activate
+
+export AIRFLOW__CORE__DAGS_FOLDER=/mnt/d/NOPIS/Phase_3/AirFlow_Practice/dags
+
+airflow standalone
+
+Then open:
+
+http://localhost:8080
+
+And trigger nopis_telecom_pipeline from the UI. ✅
+
+Important: Don't close the WSL terminal running airflow standalone, otherwise the Airflow UI and scheduler will stop.

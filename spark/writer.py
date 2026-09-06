@@ -33,7 +33,7 @@ _ANALYTICS_COLUMNS = [
 ]
 
 
-def write_outputs(enriched_df, processed_path, analytics_path):
+def write_outputs(enriched_df, processed_path, analytics_path, incremental=False):
     """
     Write pipeline outputs to the processed and analytics data zones.
 
@@ -72,13 +72,16 @@ def write_outputs(enriched_df, processed_path, analytics_path):
     parquet_path = f"{processed_path}/enriched_hourly_grid"
     logger.info("Writing processed Parquet to: %s", parquet_path)
 
-    (
-        enriched_df
-        .write
-        .mode("overwrite")
-        .partitionBy("date")
-        .parquet(parquet_path)
-    )
+    writer = enriched_df.write
+    if incremental:
+        writer = (
+            writer
+            .option("partitionOverwriteMode", "dynamic")
+            .mode("overwrite")
+        )
+    else:
+        writer = writer.mode("overwrite")
+    writer.partitionBy("date").parquet(parquet_path)
 
     logger.info("Processed Parquet write complete.")
 
@@ -92,7 +95,10 @@ def write_outputs(enriched_df, processed_path, analytics_path):
     analytics_parquet_path = f"{analytics_path}/hourly_grid_summary"
     logger.info("Writing analytics Parquet to: %s", analytics_parquet_path)
 
-    hourly_grid_summary.write.mode("overwrite").parquet(analytics_parquet_path)
+    if incremental:
+        hourly_grid_summary.write.mode("append").parquet(analytics_parquet_path)
+    else:
+        hourly_grid_summary.write.mode("overwrite").parquet(analytics_parquet_path)
 
     logger.info("Analytics Parquet write complete.")
 
@@ -100,14 +106,15 @@ def write_outputs(enriched_df, processed_path, analytics_path):
     csv_path = f"{analytics_path}/summary_csv"
     logger.info("Writing CSV summary to: %s", csv_path)
 
-    (
-        hourly_grid_summary
-        .coalesce(1)
-        .write
-        .mode("overwrite")
-        .option("header", True)
-        .csv(csv_path)
-    )
+    if not incremental:
+        (
+            hourly_grid_summary
+            .coalesce(1)
+            .write
+            .mode("overwrite")
+            .option("header", True)
+            .csv(csv_path)
+        )
 
     logger.info("CSV summary write complete.")
 

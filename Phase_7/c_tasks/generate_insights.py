@@ -17,11 +17,16 @@ from datetime import datetime, timezone
 try:
     from Phase_4.database import SessionLocal
     from Phase_4.services import get_evidence_object
-    from Phase_4.claude_insight_service import generate_insight, current_model_name
+    from Phase_7.c_tasks.claude_insight_service import generate_insight, current_model_name
 except ModuleNotFoundError:
-    from database import SessionLocal
-    from services import get_evidence_object
-    from claude_insight_service import generate_insight, current_model_name
+    try:
+        from database import SessionLocal
+        from services import get_evidence_object
+        from claude_insight_service import generate_insight, current_model_name
+    except ModuleNotFoundError:
+        from Phase_4.database import SessionLocal
+        from Phase_4.services import get_evidence_object
+        from claude_insight_service import generate_insight, current_model_name
 
 # Chosen to cover the range actually present in the data: two NORMAL grids,
 # two HIGH-direction anomalies, and one LOW-direction anomaly.

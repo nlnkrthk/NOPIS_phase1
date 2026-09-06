@@ -1,0 +1,13 @@
+{
+  "_comment": "299. Package them into a project or team plugin.",
+  "mcpServers": {
+    "nopis-network-intelligence": {
+      "command": "python",
+      "args": [".claude/mcp_server.py"],
+      "env": {
+        "NOPIS_API_BASE_URL": "${NOPIS_API_BASE_URL}"
+      },
+      "description": "Approved NOPIS Network Intelligence MCP server. Thin wrapper over existing FastAPI endpoints. Requires NOPIS_API_BASE_URL environment variable name (no hardcoded secrets or credentials)."
+    }
+  }
+}
