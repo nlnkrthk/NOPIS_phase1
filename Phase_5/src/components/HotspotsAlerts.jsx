@@ -1,13 +1,57 @@
 import React, { useState, useEffect } from 'react';
-import { getNetworkHotspots, getNetworkAlerts } from '../api/config';
+import { getNetworkHotspots, getNetworkAlerts, getRisingGrids } from '../api/config';
 import MapLayer from './MapLayer';
 
 const SEVERITY_ORDER = ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW', 'INFO'];
+
+// get_hotspots has no INFO tier; get_alerts does (see services.py for the
+// exact thresholds — also shown in the "Severity Legend" panel below).
+const HOTSPOT_SEVERITIES = ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW'];
+const ALERT_SEVERITIES = ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW', 'INFO'];
+
+// A single "top 500 by raw activity" call is dominated by CRITICAL/HIGH
+// grids (Milan's activity distribution is heavily skewed), so MEDIUM/LOW/INFO
+// never appear no matter how high that one limit is set. Fetching each
+// severity band separately guarantees every level is represented — both in
+// the "All Severities" filter option list and on the map.
+const PER_SEVERITY_CAP = 150;
+
+// Mirrors the exact thresholds in Phase_4/services.py (get_hotspots / get_alerts).
+// Shown to the user as the "Severity Legend" so the condition behind each
+// color is never a mystery.
+const SEVERITY_LEGEND = [
+  {
+    severity: 'CRITICAL',
+    color: '#dc2626',
+    condition: 'total_activity ≥ 2000',
+  },
+  {
+    severity: 'HIGH',
+    color: '#f97316',
+    condition: '1000 ≤ total_activity < 2000',
+  },
+  {
+    severity: 'MEDIUM',
+    color: '#f59e0b',
+    condition: 'Hotspots: 500 ≤ total_activity < 1000 · Alerts: internet_activity ≥ 500 and internet_share > 85%',
+  },
+  {
+    severity: 'LOW',
+    color: '#3b82f6',
+    condition: 'Hotspots: total_activity < 500 · Alerts: 500 ≤ total_activity < 1000 (not an internet surge)',
+  },
+  {
+    severity: 'INFO',
+    color: '#64748b',
+    condition: 'Alerts only: 300 ≤ total_activity < 500',
+  },
+];
 
 export default function HotspotsAlerts({ onNavigateToGrid }) {
   const [geoData, setGeoData] = useState(null);
   const [hotspots, setHotspots] = useState([]);
   const [alerts, setAlerts] = useState([]);
+  const [risingGrids, setRisingGrids] = useState([]);
   const [availableSeverities, setAvailableSeverities] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -38,10 +82,16 @@ export default function HotspotsAlerts({ onNavigateToGrid }) {
     setError(null);
     try {
       // 179. Add limit and severity filtering.
-      const [hotspotsData, alertsData] = await Promise.all([
-        getNetworkHotspots(500, ''),
-        getNetworkAlerts(500, '', '')
+      // Fetch every severity band separately (rather than one large
+      // top-N-by-activity call) so MEDIUM, LOW and INFO grids are actually
+      // returned instead of being crowded out by CRITICAL/HIGH.
+      const [hotspotBands, alertBands, risingData] = await Promise.all([
+        Promise.all(HOTSPOT_SEVERITIES.map((sev) => getNetworkHotspots(PER_SEVERITY_CAP, '', sev))),
+        Promise.all(ALERT_SEVERITIES.map((sev) => getNetworkAlerts(PER_SEVERITY_CAP, sev, ''))),
+        getRisingGrids(limit, '', 'HIGH') // Default direction is HIGH
       ]);
+      const hotspotsData = hotspotBands.flat();
+      const alertsData = alertBands.flat();
 
       const severities = [...new Set([
         ...hotspotsData.map(item => item.severity),
@@ -61,6 +111,7 @@ export default function HotspotsAlerts({ onNavigateToGrid }) {
 
       setHotspots(filteredHotspots);
       setAlerts(filteredAlerts);
+      setRisingGrids(risingData);
     } catch (err) {
       setError(err.message || 'Failed to fetch operational data');
     } finally {
@@ -148,6 +199,17 @@ export default function HotspotsAlerts({ onNavigateToGrid }) {
         </button>
       </div>
 
+      {/* Severity legend — the exact condition behind each color, matching Phase_4/services.py. */}
+      <div className="severity-legend">
+        {SEVERITY_LEGEND.map(({ severity, color, condition }) => (
+          <div key={severity} className="legend-entry">
+            <span className="legend-swatch" style={{ backgroundColor: color }}></span>
+            <span className="legend-severity-name">{severity}</span>
+            <span className="legend-condition">{condition}</span>
+          </div>
+        ))}
+      </div>
+
       {error && (
         <div className="api-status-banner api-status-error">
           <div className="banner-content">
@@ -229,6 +291,53 @@ export default function HotspotsAlerts({ onNavigateToGrid }) {
                       <td style={{ fontWeight: '600' }}>{item.activity.toFixed(2)}</td>
                       <td style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
                         {item.timestamp.replace('T', ' ')}
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+          
+          <div className="panel-header" style={{ marginTop: '2rem' }}>
+            <h3>Top Rising Grids</h3>
+          </div>
+          
+          <div className="table-responsive">
+            <table className="telemetry-table">
+              <thead>
+                <tr>
+                  <th>Grid</th>
+                  <th>Current Activity</th>
+                  <th>Baseline Activity</th>
+                  <th>% Increase</th>
+                  <th>Hourly Timestamp</th>
+                </tr>
+              </thead>
+              <tbody>
+                {risingGrids.length === 0 ? (
+                  <tr>
+                    <td colSpan="5" style={{ textAlign: 'center', padding: '2rem' }}>
+                      No rising grids found for the current reporting window.
+                    </td>
+                  </tr>
+                ) : (
+                  risingGrids.map((item, idx) => (
+                    <tr 
+                      key={`rising-${item.grid_id}-${idx}`}
+                      onClick={() => onNavigateToGrid(item.grid_id)}
+                      style={{ cursor: 'pointer' }}
+                    >
+                      <td><strong>#{item.grid_id}</strong></td>
+                      <td>{item.current_activity.toFixed(2)}</td>
+                      <td>{item.baseline_activity.toFixed(2)}</td>
+                      <td>
+                        <span className="severity-badge badge-high" style={{ backgroundColor: 'var(--bg-accent)', color: 'var(--text-accent)' }}>
+                          +{item.pct_increase.toFixed(1)}%
+                        </span>
+                      </td>
+                      <td style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+                        {item.feature_timestamp.replace('T', ' ')}
                       </td>
                     </tr>
                   ))

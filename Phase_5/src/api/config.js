@@ -70,10 +70,11 @@ export async function getGridFeatures(gridId, asOf) {
 }
 
 // 176. Call /network/hotspots and /network/alerts.
-export async function getNetworkHotspots(limit = 10, asOf = '') {
+export async function getNetworkHotspots(limit = 10, asOf = '', severity = '') {
   const params = new URLSearchParams({ limit });
   if (asOf) params.append('as_of', asOf);
-  
+  if (severity) params.append('severity', severity);
+
   const response = await fetch(`${API_BASE_URL}/network/hotspots?${params}`);
   if (!response.ok) throw new Error(`Failed to fetch hotspots: ${response.status}`);
   return response.json();
@@ -88,6 +89,17 @@ export async function getNetworkAlerts(limit = 20, severity = '', asOf = '') {
   if (!response.ok) throw new Error(`Failed to fetch alerts: ${response.status}`);
   return response.json();
 }
+
+export async function getRisingGrids(limit = 10, asOf = '', direction = 'HIGH') {
+  const params = new URLSearchParams({ limit });
+  if (asOf) params.append('as_of', asOf);
+  if (direction) params.append('direction', direction);
+  
+  const response = await fetch(`${API_BASE_URL}/network/rising-grids?${params}`);
+  if (!response.ok) throw new Error(`Rising grids request failed: ${response.status}`);
+  return response.json();
+}
+
 // 183. Submit feature values or a selected grid to POST /network/predict-risk.
 export async function getPredictRisk(payload) {
   // payload should contain at least { grid_id: <id> } and optional feature fields.
@@ -106,5 +118,31 @@ export async function getPredictRisk(payload) {
 export async function getAvailableModels() {
   const response = await fetch(`${API_BASE_URL}/network/models`);
   if (!response.ok) throw new Error(`Failed to fetch available models: ${response.status}`);
+  return response.json();
+}
+
+// C1 — Task 229. Fetch the curated evidence object (grid_features JOIN
+// network_anomaly_scores) for a grid, with no Claude call involved.
+export async function getGridEvidence(gridId) {
+  const response = await fetch(`${API_BASE_URL}/network/grid/${gridId}/evidence`);
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    const error = new Error(errorData.detail || `Evidence request failed: ${response.status}`);
+    error.status = response.status;
+    throw error;
+  }
+  return response.json();
+}
+
+// C1 — Task 230. Fetch the evidence object plus Claude's four-section
+// (SEVERITY / EVIDENCE / INTERPRETATION / NEXTCHECKS) explanation for a grid.
+export async function getGridInsight(gridId) {
+  const response = await fetch(`${API_BASE_URL}/network/grid/${gridId}/insight`);
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    const error = new Error(errorData.detail || `AI insight request failed: ${response.status}`);
+    error.status = response.status;
+    throw error;
+  }
   return response.json();
 }

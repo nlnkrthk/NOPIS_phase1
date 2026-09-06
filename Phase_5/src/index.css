@@ -701,6 +701,41 @@ body {
   border: 1px solid var(--border-color);
 }
 
+.severity-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1.5rem;
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: 0.5rem;
+  padding: 0.75rem 1rem;
+  margin-top: 0.75rem;
+}
+
+.legend-entry {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.8rem;
+}
+
+.legend-swatch {
+  width: 0.75rem;
+  height: 0.75rem;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.legend-severity-name {
+  font-weight: 700;
+  color: var(--text-primary);
+  letter-spacing: 0.03em;
+}
+
+.legend-condition {
+  color: var(--text-secondary);
+}
+
 .dashboard-layout {
   display: flex;
   flex-direction: column;
@@ -1405,4 +1440,98 @@ body {
 .explain-btn:not(:disabled):hover {
   opacity: 0.9;
   transform: translateY(-1px);
+}
+
+/* C1 — Task 230. "Explain with AI" Claude insight panel. */
+.level-indeterminate {
+  background-color: rgba(148, 163, 184, 0.15);
+  color: #94a3b8;
+  border: 1px dashed rgba(148, 163, 184, 0.4);
+}
+
+.ai-insight-content {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  margin-top: 0.5rem;
+}
+
+.insight-evidence-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1.25rem;
+  padding: 0.75rem 1rem;
+  background-color: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--border-color);
+  border-radius: 0.375rem;
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+}
+
+.insight-evidence-strip strong {
+  color: var(--text-primary);
+}
+
+.insight-rule-alerts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.insight-alert-chip {
+  background-color: rgba(239, 68, 68, 0.12);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  color: #f87171;
+  padding: 0.35rem 0.75rem;
+  border-radius: 1rem;
+  font-size: 0.8rem;
+}
+
+.insight-section {
+  background-color: rgba(255, 255, 255, 0.02);
+  border: 1px solid var(--border-color);
+  border-radius: 0.375rem;
+  padding: 0.85rem 1rem;
+}
+
+.insight-section-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  font-weight: 600;
+  font-size: 0.85rem;
+  color: var(--text-primary);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  margin-bottom: 0.5rem;
+}
+
+.insight-section-text {
+  color: var(--text-secondary);
+  font-size: 0.92rem;
+  line-height: 1.6;
+  white-space: pre-wrap;
+}
+
+.insight-interpretation {
+  border-color: rgba(168, 85, 247, 0.35);
+}
+
+.insight-inference-tag {
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: none;
+  letter-spacing: normal;
+  color: #c084fc;
+  background-color: rgba(168, 85, 247, 0.12);
+  padding: 0.2rem 0.6rem;
+  border-radius: 1rem;
+}
+
+.insight-model-tag {
+  align-self: flex-end;
+  font-family: monospace;
+  font-size: 0.75rem;
+  color: var(--text-secondary);
 }

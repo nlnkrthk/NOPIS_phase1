@@ -40,8 +40,6 @@ def _load_grid_lookup(spark, reference_path):
         Two columns: grid_id (int), geometry (string/JSON).
     """
     import os
-    import tempfile
-
     logger.info("Loading GeoJSON reference: %s", reference_path)
 
     with open(reference_path, "r", encoding="utf-8") as f:
@@ -52,7 +50,10 @@ def _load_grid_lookup(spark, reference_path):
 
     # ── Write lookup to a temp JSON file (JVM-native read) ────────
     # Each line is a JSON object: {"grid_id": ..., "geometry": "..."}
-    tmp_dir = r"D:\NOPIS\tmp\spark_temp"
+    tmp_dir = os.environ.get(
+        "NOPIS_SPARK_TMP",
+        os.path.join(os.path.dirname(os.path.dirname(__file__)), "tmp", "spark_temp"),
+    )
     os.makedirs(tmp_dir, exist_ok=True)
     tmp_path = os.path.join(tmp_dir, "grid_lookup.json")
 

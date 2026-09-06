@@ -14,43 +14,55 @@ from sqlalchemy.exc import SQLAlchemyError
 try:
     from Phase_4.database import SessionLocal
     from Phase_4.schemas import (
-        NetworkSummaryResponse, 
-        GridActivityPoint, 
-        HotspotItem, 
-        AlertItem, 
+        NetworkSummaryResponse,
+        GridActivityPoint,
+        HotspotItem,
+        AlertItem,
         GridFeaturesResponse,
         PredictRiskRequest,
         PredictRiskResponse,
-        AvailableModelResponse
+        AvailableModelResponse,
+        EvidenceObject,
+        NetworkInsightResponse,
+        RisingGridItem
     )
     from Phase_4.services import (
-        get_network_summary, 
-        get_grid_activity, 
-        get_hotspots, 
-        get_alerts, 
+        get_network_summary,
+        get_grid_activity,
+        get_hotspots,
+        get_alerts,
         get_grid_features,
-        predict_grid_risk
+        predict_grid_risk,
+        get_evidence_object,
+        get_rising_grids
     )
+    from Phase_4.claude_insight_service import generate_insight, current_model_name
 except ModuleNotFoundError:
     from database import SessionLocal
     from schemas import (
-        NetworkSummaryResponse, 
-        GridActivityPoint, 
-        HotspotItem, 
-        AlertItem, 
+        NetworkSummaryResponse,
+        GridActivityPoint,
+        HotspotItem,
+        AlertItem,
         GridFeaturesResponse,
         PredictRiskRequest,
         PredictRiskResponse,
-        AvailableModelResponse
+        AvailableModelResponse,
+        EvidenceObject,
+        NetworkInsightResponse,
+        RisingGridItem
     )
     from services import (
-        get_network_summary, 
-        get_grid_activity, 
-        get_hotspots, 
-        get_alerts, 
+        get_network_summary,
+        get_grid_activity,
+        get_hotspots,
+        get_alerts,
         get_grid_features,
-        predict_grid_risk
+        predict_grid_risk,
+        get_evidence_object,
+        get_rising_grids
     )
+    from claude_insight_service import generate_insight, current_model_name
 
 router = APIRouter(prefix="/network", tags=["Network"])
 
@@ -145,11 +157,12 @@ def grid_activity(
 @router.get("/hotspots", response_model=List[HotspotItem])
 def network_hotspots(
     limit: int = Query(10, ge=1, le=500, description="Maximum number of hotspot entries to return"),
+    severity: Optional[str] = Query(None, description="Optional filter by severity level (CRITICAL, HIGH, MEDIUM, LOW)"),
     as_of: Optional[datetime] = Query(None, description="Optional reporting timestamp (e.g. YYYY-MM-DDTHH:MM:SS)")
 ):
     db = SessionLocal()
     try:
-        hotspots = get_hotspots(db=db, limit=limit, as_of=as_of)
+        hotspots = get_hotspots(db=db, limit=limit, as_of=as_of, severity=severity)
         return hotspots
     except SQLAlchemyError:
         raise HTTPException(
@@ -174,6 +187,30 @@ def network_alerts(
     try:
         alerts = get_alerts(db=db, limit=limit, severity=severity, as_of=as_of)
         return alerts
+    except SQLAlchemyError:
+        raise HTTPException(
+            status_code=500,
+            detail="Database unavailable"
+        )
+    except Exception:
+        raise HTTPException(
+            status_code=500,
+            detail="Internal server error"
+        )
+    finally:
+        db.close()
+
+
+@router.get("/rising-grids", response_model=List[RisingGridItem])
+def network_rising_grids(
+    limit: int = Query(10, ge=1, le=500, description="Maximum number of rising grids to return"),
+    as_of: Optional[datetime] = Query(None, description="Optional reporting timestamp (e.g. YYYY-MM-DDTHH:MM:SS)"),
+    direction: Optional[str] = Query("HIGH", description="Optional filter by anomaly direction (HIGH, NORMAL, LOW)")
+):
+    db = SessionLocal()
+    try:
+        grids = get_rising_grids(db=db, limit=limit, as_of=as_of, direction=direction)
+        return grids
     except SQLAlchemyError:
         raise HTTPException(
             status_code=500,
@@ -265,4 +302,68 @@ def available_models():
     except ModuleNotFoundError:
         import ml5_model_service
     return ml5_model_service.get_available_models()
+
+# C1 — Task 229. Create GET /network/grid/{grid_id}/evidence.
+# Returns the curated evidence object built from the grid_features +
+# network_anomaly_scores JOIN, with no Claude call involved.
+@router.get("/grid/{grid_id}/evidence", response_model=EvidenceObject)
+def grid_evidence(
+    grid_id: int = Path(..., description="Grid identifier to build a Claude evidence object for")
+):
+    db = SessionLocal()
+    try:
+        evidence = get_evidence_object(db=db, grid_id=grid_id)
+        if evidence is None:
+            raise HTTPException(
+                status_code=404,
+                detail=(
+                    f"No matched grid_features + network_anomaly_scores row for grid "
+                    f"{grid_id} (grid_id + feature_timestamp must both match)."
+                )
+            )
+        return evidence
+    except HTTPException:
+        raise
+    except SQLAlchemyError:
+        raise HTTPException(status_code=500, detail="Database unavailable")
+    except Exception:
+        raise HTTPException(status_code=500, detail="Internal server error")
+    finally:
+        db.close()
+
+# C1 — Task 230. Create GET /network/grid/{grid_id}/insight.
+# Builds the evidence object (Task 229) and sends it to Claude for a
+# SEVERITY / EVIDENCE / INTERPRETATION / NEXTCHECKS explanation.
+@router.get("/grid/{grid_id}/insight", response_model=NetworkInsightResponse)
+def grid_insight(
+    grid_id: int = Path(..., description="Grid identifier to generate a Claude network insight for")
+):
+    db = SessionLocal()
+    try:
+        evidence = get_evidence_object(db=db, grid_id=grid_id)
+        if evidence is None:
+            raise HTTPException(
+                status_code=404,
+                detail=f"No matched grid_features + network_anomaly_scores row for grid {grid_id}."
+            )
+    except HTTPException:
+        raise
+    except SQLAlchemyError:
+        raise HTTPException(status_code=500, detail="Database unavailable")
+    finally:
+        db.close()
+
+    try:
+        claude_response = generate_insight(evidence)
+    except RuntimeError as error:
+        # ANTHROPIC_API_KEY missing — a configuration error, not a server fault.
+        raise HTTPException(status_code=503, detail=str(error))
+    except Exception:
+        raise HTTPException(status_code=502, detail="Claude API request failed")
+
+    return {
+        "evidence": evidence,
+        "claude_response": claude_response,
+        "model": current_model_name(),
+    }
 

@@ -115,3 +115,49 @@ class AvailableModelResponse(BaseModel):
     features: List[str]
 
 
+# C1 — Task 229. Curated evidence object built from the grid_features +
+# network_anomaly_scores JOIN. Consumed directly by the Claude prompt in
+# Task 230 — do not add fields that aren't literally present in the JOIN.
+class RuleAlert(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    direction: str
+    reason: str
+
+
+class EvidenceObject(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    grid_id: int
+    timestamp: str
+    current_activity: float
+    baseline_activity: float
+    activity_growth: float
+    peak_ratio: float
+    variability: float
+    internet_share: float
+    anomaly_score: float
+    direction: str
+    rule_alerts: List[RuleAlert]
+
+
+# C1 — Task 230. Evidence object plus Claude's four-section
+# (SEVERITY / EVIDENCE / INTERPRETATION / NEXTCHECKS) response text.
+class NetworkInsightResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    evidence: EvidenceObject
+    claude_response: str
+    model: str
+
+
+class RisingGridItem(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    grid_id: int
+    feature_timestamp: datetime
+    current_activity: float
+    baseline_activity: float
+    absolute_delta: float
+    pct_increase: float
+    direction: str

@@ -264,14 +264,28 @@ def get_grid_activity(
 
 # 140. Create GET /network/hotspots and GET /network/alerts.
 # 141.Allow limit, severity and as_of query parameters.
+#
+# Severity is decided purely from total_activity for hotspots:
+#   total_activity >= 2000              -> CRITICAL
+#   1000 <= total_activity < 2000       -> HIGH
+#   500  <= total_activity < 1000       -> MEDIUM
+#   total_activity < 500                -> LOW
+#
+# `limit` is applied to the severity-filtered stream, not as a SQL LIMIT
+# before it — grids are heavily skewed toward CRITICAL/HIGH, so cutting off
+# at the raw top-N-by-activity row would almost never reach a MEDIUM or LOW
+# row. Fetching every grid for the timestamp and filtering by severity in
+# Python is what lets a caller ask for "top N MEDIUM" or "top N LOW" and get
+# real rows back instead of an empty list.
 def get_hotspots(
     db: Session,
     limit: int = 10,
-    as_of: Optional[datetime] = None
+    as_of: Optional[datetime] = None,
+    severity: Optional[str] = None
 ) -> list:
     if as_of is None:
         max_ts_query = text("""
-            SELECT MAX(t.timestamp) 
+            SELECT MAX(t.timestamp)
             FROM dim_time t
             JOIN fact_network_activity f ON f.time_key = t.time_key
         """)
@@ -283,7 +297,7 @@ def get_hotspots(
         effective_as_of = as_of.replace(minute=0, second=0, microsecond=0)
 
     query_sql = text("""
-        SELECT 
+        SELECT
             f.grid_id,
             t.timestamp,
             f.total_activity,
@@ -294,25 +308,27 @@ def get_hotspots(
         JOIN dim_time t ON f.time_key = t.time_key
         WHERE t.timestamp = :as_of
         ORDER BY f.total_activity DESC, f.grid_id ASC
-        LIMIT :limit
     """)
-    rows = db.execute(query_sql, {"as_of": effective_as_of, "limit": limit}).mappings().all()
+    rows = db.execute(query_sql, {"as_of": effective_as_of}).mappings().all()
 
     results = []
     for r in rows:
         act = float(r["total_activity"] or 0.0)
         if act >= 2000:
-            severity = "CRITICAL"
+            grid_severity = "CRITICAL"
             reason = "Extreme high network load area requiring priority NOC monitoring"
         elif act >= 1000:
-            severity = "HIGH"
+            grid_severity = "HIGH"
             reason = "High network traffic volume exceeding operational threshold"
         elif act >= 500:
-            severity = "MEDIUM"
+            grid_severity = "MEDIUM"
             reason = "Elevated network usage hotspot"
         else:
-            severity = "LOW"
+            grid_severity = "LOW"
             reason = "Active operational hotspot"
+
+        if severity is not None and grid_severity.upper() != severity.strip().upper():
+            continue
 
         results.append({
             "grid_id": int(r["grid_id"]),
@@ -321,16 +337,28 @@ def get_hotspots(
             "sms_activity": float(r["sms_activity"] or 0.0),
             "call_activity": float(r["call_activity"] or 0.0),
             "internet_activity": float(r["internet_activity"] or 0.0),
-            "severity": severity,
+            "severity": grid_severity,
             "reason": reason,
             "risk_score": None,
             "risk_level": None,
             "model_version": None,
         })
+
+        if len(results) >= limit:
+            break
+
     return results
 
 # 142. Initially serve the rule-based NP3 alerts.
 # 144. Include grid_id, hourly timestamp, the relevant activity measures, status or severity, and a human-readable reason.
+#
+# Only grids with total_activity >= 300 are considered alert-worthy at all.
+# Among those, severity is decided in this order (first match wins):
+#   total_activity >= 2000                                   -> CRITICAL (HIGH_ACTIVITY)
+#   1000 <= total_activity < 2000                             -> HIGH     (HIGH_ACTIVITY)
+#   internet_activity >= 500 AND internet_share > 0.85         -> MEDIUM   (INTERNET_SURGE)
+#   500 <= total_activity < 1000 (and not an internet surge)   -> LOW      (ACTIVITY_SPIKE)
+#   300 <= total_activity < 500                                -> INFO     (ELEVATED_ACTIVITY)
 def get_alerts(
     db: Session,
     limit: int = 20,
@@ -417,6 +445,73 @@ def get_alerts(
 
     return alerts
 
+
+def get_rising_grids(
+    db: Session,
+    limit: int = 10,
+    as_of: Optional[datetime] = None,
+    direction: Optional[str] = "HIGH"
+) -> list:
+    if as_of is None:
+        max_ts_query = text("""
+            SELECT MAX(feature_timestamp)
+            FROM network_anomaly_scores
+        """)
+        effective_as_of = db.execute(max_ts_query).scalar()
+        if effective_as_of is None:
+            return []
+    else:
+        # Round down to nearest hour (data is hourly granularity)
+        effective_as_of = as_of.replace(minute=0, second=0, microsecond=0)
+
+    params = {"as_of": effective_as_of, "limit": limit}
+    
+    where_clauses = ["feature_timestamp <= :as_of"]
+    
+    # Exclude 'LOW' by default, or filter strictly if specified
+    if direction:
+        where_clauses.append("direction = :direction")
+        params["direction"] = direction.strip().upper()
+    else:
+        where_clauses.append("direction != 'LOW'")
+
+    where_sql = " AND ".join(where_clauses)
+
+    query_sql = text(f"""
+        SELECT 
+            grid_id,
+            feature_timestamp,
+            current_value AS current_activity,
+            baseline_value AS baseline_activity,
+            deviation AS absolute_delta,
+            anomaly_score AS pct_increase,
+            direction
+        FROM network_anomaly_scores
+        WHERE {where_sql}
+        ORDER BY anomaly_score DESC
+        LIMIT :limit
+    """)
+
+    rows = db.execute(query_sql, params).mappings().all()
+
+    results = []
+    for r in rows:
+        curr_val = r.get("current_activity") if "current_activity" in r else r.get("current_value", 0.0)
+        base_val = r.get("baseline_activity") if "baseline_activity" in r else r.get("baseline_value", 0.0)
+        abs_delta = r.get("absolute_delta") if "absolute_delta" in r else r.get("deviation", 0.0)
+        pct_inc = r.get("pct_increase") if "pct_increase" in r else r.get("anomaly_score", 0.0)
+        results.append({
+            "grid_id": int(r["grid_id"]),
+            "feature_timestamp": r["feature_timestamp"],
+            "current_activity": float(curr_val or 0.0),
+            "baseline_activity": float(base_val or 0.0),
+            "absolute_delta": float(abs_delta or 0.0),
+            "pct_increase": float(pct_inc or 0.0),
+            "direction": str(r["direction"]),
+        })
+
+    return results
+
 # 146. Return the exact ML2 feature set: avg_activity, activity_growth, active_hours, peak_ratio, variability, internet_share, plus feature_timestamp.
 # 148. Return data-quality status and feature freshness alongside the values.
 # The API reads stored features; no feature engineering arithmetic is performed here.
@@ -497,6 +592,60 @@ def get_grid_features(db: Session, grid_id: int, as_of: Optional[datetime] = Non
         "data_quality_status": str(row["data_quality_status"]),
         "freshness_hours": freshness_hrs,
         "is_fresh": is_fresh
+    }
+
+# C1 — Task 229. Build the curated evidence object for the Claude Network
+# Insight Generator from the grid_features + network_anomaly_scores JOIN.
+# Only matched rows are used — an unmatched grid_id returns None rather than
+# a fabricated evidence object. No existing table or pipeline is modified.
+EVIDENCE_QUERY = text("""
+    SELECT
+        gf.grid_id            AS grid_id,
+        gf.feature_timestamp  AS feature_timestamp,
+        nas.current_value     AS current_activity,
+        nas.baseline_value    AS baseline_activity,
+        gf.activity_growth    AS activity_growth,
+        gf.peak_ratio         AS peak_ratio,
+        gf.variability        AS variability,
+        gf.internet_share     AS internet_share,
+        nas.anomaly_score     AS anomaly_score,
+        nas.direction         AS direction,
+        nas.anomaly_flag      AS anomaly_flag,
+        nas.reason            AS reason
+    FROM grid_features gf
+    JOIN network_anomaly_scores nas
+        ON gf.grid_id = nas.grid_id
+        AND gf.feature_timestamp = nas.feature_timestamp
+    WHERE gf.grid_id = :grid_id
+    LIMIT 1
+""")
+
+
+def get_evidence_object(db: Session, grid_id: int) -> Optional[dict]:
+    row = db.execute(EVIDENCE_QUERY, {"grid_id": grid_id}).mappings().first()
+    if row is None:
+        return None
+
+    # rule_alerts is derived only from anomaly_flag/reason — never invented.
+    rule_alerts = []
+    if row["anomaly_flag"]:
+        rule_alerts.append({
+            "direction": row["direction"],
+            "reason": row["reason"],
+        })
+
+    return {
+        "grid_id": int(row["grid_id"]),
+        "timestamp": row["feature_timestamp"].strftime("%Y-%m-%d %H:%M:%S"),
+        "current_activity": float(row["current_activity"]),
+        "baseline_activity": float(row["baseline_activity"]),
+        "activity_growth": float(row["activity_growth"]),
+        "peak_ratio": float(row["peak_ratio"]),
+        "variability": float(row["variability"]),
+        "internet_share": float(row["internet_share"]),
+        "anomaly_score": float(row["anomaly_score"]),
+        "direction": row["direction"],
+        "rule_alerts": rule_alerts,
     }
 
 # 150. Create POST /network/predict-risk with a Pydantic request model.

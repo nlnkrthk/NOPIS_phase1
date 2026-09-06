@@ -11,23 +11,37 @@ __pycache__/
 # Jupyter checkpoints
 .ipynb_checkpoints/
 
-#Phase 2 outputs
+# Phase 2 outputs
 outputs/
 
+# Windows & temporary Spark directories
 winutils/
+Phase_2/winutils/
 tmp/
 NOPIStmpspark_temp/
+*spark_temp*/
 
+# Spark outputs and logs
 spark/output/
-
 logs/*
 
-Phase_2/winutils/
-
+# Phase 4 outputs & tests
+Phase_4/output/
 Phase_4/tests/
 
-Phase_5/node_modules/*
+# Frontend dependencies & build artifacts
+node_modules/
+Phase_5/node_modules/
+Phase_5/dist/
 
+# Phase 6 ML models
 Phase_6/ml/
 
+# AI Agent artifacts
 AGENTS.md
+CLAUDE.md
+.claude/
+
+# Root-level secrets (Claude API key). Phase_5/.env has no secrets and stays tracked.
+/.env
+

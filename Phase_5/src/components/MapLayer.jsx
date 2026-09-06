@@ -43,41 +43,29 @@ export default function MapLayer({ geoData, hotspots, alerts, onGridSelect }) {
   };
 
   // 181. Visually distinguish each API severity in both the ranked table and the map.
+  // Colors mirror the "Severity Legend" shown on the Hotspots & Alerts page —
+  // color is driven purely by severity, not by whether the grid was flagged
+  // as a Hotspot or an Alert (that distinction is still shown in the tooltip).
+  const SEVERITY_STYLE = {
+    CRITICAL: { color: '#dc2626', weight: 4, fillOpacity: 0.6, dashArray: '' },
+    HIGH: { color: '#f97316', weight: 3.5, fillOpacity: 0.45, dashArray: '' },
+    MEDIUM: { color: '#f59e0b', weight: 3, fillOpacity: 0.3, dashArray: '' },
+    LOW: { color: '#3b82f6', weight: 2, fillOpacity: 0.18, dashArray: '5, 5' },
+    INFO: { color: '#64748b', weight: 2, fillOpacity: 0.1, dashArray: '2, 4' },
+  };
+  const DEFAULT_STYLE = { color: '#334155', weight: 1, fillOpacity: 0, dashArray: '' };
+
   const styleFeature = (feature) => {
     const gridId = feature.properties.cellId;
-    const { severity, source } = getGridStatus(gridId);
-    
-    let color = source === 'Hotspot' ? '#f59e0b' : '#3b82f6';
-    let dashArray = '';
-    let weight = 2;
-    let fillOpacity = 0;
-    
-    if (severity === 'CRITICAL') {
-      color = '#facc15';
-      weight = 4;
-      fillOpacity = 0.6;
-    } else if (severity === 'HIGH') {
-      color = source === 'Hotspot' ? '#f59e0b' : '#ef4444';
-      weight = 4;
-      fillOpacity = 0.5;
-    } else if (severity === 'MEDIUM') {
-      color = source === 'Hotspot' ? '#d97706' : '#f59e0b';
-      weight = 3;
-      fillOpacity = 0.3;
-    } else if (severity === 'LOW') {
-      color = source === 'Hotspot' ? '#fbbf24' : '#3b82f6';
-      dashArray = '5, 5';
-    } else if (severity === 'INFO') {
-      color = '#64748b';
-      dashArray = '2, 4';
-    }
+    const { severity } = getGridStatus(gridId);
+    const style = SEVERITY_STYLE[severity] || DEFAULT_STYLE;
 
     return {
-      color,
-      weight,
-      dashArray,
-      fillOpacity,
-      fillColor: color,
+      color: style.color,
+      weight: style.weight,
+      dashArray: style.dashArray,
+      fillOpacity: style.fillOpacity,
+      fillColor: style.color,
     };
   };
 

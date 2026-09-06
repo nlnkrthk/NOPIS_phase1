@@ -40,7 +40,10 @@ def create_spark_session(
     hadoop_home = hadoop_home or _DEFAULT_HADOOP_HOME
 
     # ── Temp directory (avoids PermissionError on system temp) ──────
-    spark_tmp = r"D:\NOPIS\tmp\spark_temp"
+    spark_tmp = os.environ.get(
+        "NOPIS_SPARK_TMP",
+        os.path.join(os.path.dirname(os.path.dirname(__file__)), "tmp", "spark_temp"),
+    )
     os.makedirs(spark_tmp, exist_ok=True)
     os.environ["TMPDIR"] = spark_tmp
     os.environ["TEMP"] = spark_tmp

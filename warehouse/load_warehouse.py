@@ -7,11 +7,9 @@ from sqlalchemy import create_engine, text
 # Configuration
 # ================================================================
 
-DATABASE_URL = "mysql+pymysql://root:root@localhost/nopis"
-
-GEOJSON_PATH = r"D:\NOPIS\data\reference\milano-grid.geojson"
-
-PARQUET_PATH = r"D:\NOPIS\data\processed\enriched_hourly_grid"
+DATABASE_URL = "mysql+pymysql://root:root@10.162.142.34:3306/nopis"
+GEOJSON_PATH = "/mnt/d/NOPIS/data/reference/milano-grid.geojson"
+PARQUET_PATH = "/mnt/d/NOPIS/data/processed/enriched_hourly_grid"
 
 
 # ================================================================

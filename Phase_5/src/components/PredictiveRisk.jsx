@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { getAvailableModels, getGridFeatures, getPredictRisk } from '../api/config';
+import { getAvailableModels, getGridFeatures, getPredictRisk, getGridInsight } from '../api/config';
 
 const FEATURE_FIELDS = [
   ['avg_activity', 'Average activity'],
@@ -9,6 +9,40 @@ const FEATURE_FIELDS = [
   ['variability', 'Variability'],
   ['internet_share', 'Internet share'],
 ];
+
+// C1 — Task 230. Claude always responds in these exact four sections;
+// split the raw text back into a { SEVERITY, EVIDENCE, INTERPRETATION,
+// NEXTCHECKS } map so each can be styled separately in the UI.
+const INSIGHT_HEADINGS = ['SEVERITY', 'EVIDENCE', 'INTERPRETATION', 'NEXTCHECKS'];
+
+function parseInsightSections(text) {
+  const sections = {};
+  let current = null;
+  (text || '').split('\n').forEach((line) => {
+    const heading = INSIGHT_HEADINGS.find((h) => h === line.trim());
+    if (heading) {
+      current = heading;
+      sections[current] = [];
+    } else if (current) {
+      sections[current].push(line);
+    }
+  });
+  Object.keys(sections).forEach((key) => {
+    sections[key] = sections[key].join('\n').trim();
+  });
+  return sections;
+}
+
+// Maps Claude's SEVERITY line to a badge style. Falls back to
+// "indeterminate" when the evidence was insufficient (Task 233) — Claude
+// is instructed to say so explicitly rather than guessing a level.
+function severityBadgeInfo(severityText) {
+  const upper = (severityText || '').toUpperCase();
+  if (upper.includes('HIGH')) return { label: 'HIGH', className: 'level-high' };
+  if (upper.includes('ATTENTION')) return { label: 'ATTENTION', className: 'level-medium' };
+  if (upper.includes('NORMAL')) return { label: 'NORMAL', className: 'level-low' };
+  return { label: 'INDETERMINATE', className: 'level-indeterminate' };
+}
 
 export default function PredictiveRisk() {
   const [gridInput, setGridInput] = useState('4821');
@@ -22,6 +56,11 @@ export default function PredictiveRisk() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [result, setResult] = useState(null);
+
+  // C1 — Task 230. State for the "Explain with AI" Claude insight panel.
+  const [insight, setInsight] = useState(null);
+  const [insightLoading, setInsightLoading] = useState(false);
+  const [insightError, setInsightError] = useState(null);
 
   useEffect(() => {
     getAvailableModels()
@@ -57,6 +96,10 @@ export default function PredictiveRisk() {
     setLoading(true);
     setError(null);
     setResult(null);
+    // A new prediction targets a (possibly different) grid — any previous
+    // AI insight no longer applies, so clear it rather than showing stale data.
+    setInsight(null);
+    setInsightError(null);
 
     try {
       // 183. Submit feature values or a selected grid to POST/network/predict-risk.
@@ -74,6 +117,23 @@ export default function PredictiveRisk() {
       setError(err.message || 'Failed to generate prediction');
     } finally {
       setLoading(false);
+    }
+  };
+
+  // C1 — Task 230. Explain the same grid's evidence-grounded operational
+  // context via GET /network/grid/{grid_id}/insight.
+  const handleExplainWithAI = async () => {
+    if (!submittedInputs?.grid_id) return;
+    setInsightLoading(true);
+    setInsightError(null);
+    setInsight(null);
+    try {
+      const data = await getGridInsight(submittedInputs.grid_id);
+      setInsight(data);
+    } catch (err) {
+      setInsightError(err.message || 'Failed to generate AI insight');
+    } finally {
+      setInsightLoading(false);
     }
   };
 
@@ -206,13 +266,89 @@ export default function PredictiveRisk() {
 
               <div className="narrative-region">
                 <h4>Assistant Analysis</h4>
-                <p className="narrative-placeholder-text">
-                  LLM narrative explanation will be generated here to provide contextual insight into the prediction.
-                </p>
-                {/* 186. Add a placeholder "Explain with AI" action for the later Claude phase. */}
-                <button className="explain-btn" disabled>
-                  ✨ Explain with AI (Coming Soon)
+
+                {!insight && !insightLoading && !insightError && (
+                  <p className="narrative-placeholder-text">
+                    Get an evidence-grounded operational explanation for Grid #{submittedInputs?.grid_id} from Claude —
+                    it only reasons over the stored activity-measure evidence, never invents numbers, and never claims
+                    network congestion.
+                  </p>
+                )}
+
+                {/* C1 — Task 186/230. "Explain with AI" now calls GET /network/grid/{grid_id}/insight. */}
+                <button
+                  className="explain-btn"
+                  onClick={handleExplainWithAI}
+                  disabled={insightLoading || !submittedInputs?.grid_id}
+                >
+                  {insightLoading ? '✨ Generating insight...' : '✨ Explain with AI'}
                 </button>
+
+                {insightError && (
+                  <div className="grid-status-alert alert-error">
+                    <span className="alert-icon">⚠️</span>
+                    <div className="alert-body">
+                      <strong>AI Insight Failed</strong>
+                      <p>{insightError}</p>
+                    </div>
+                  </div>
+                )}
+
+                {insight && (() => {
+                  const sections = parseInsightSections(insight.claude_response);
+                  const severity = severityBadgeInfo(sections.SEVERITY);
+                  const ev = insight.evidence;
+                  return (
+                    <div className="ai-insight-content">
+                      <div className="insight-evidence-strip">
+                        <span>Grid <strong>#{ev.grid_id}</strong></span>
+                        <span>Timestamp <strong>{ev.timestamp}</strong></span>
+                        <span>Current activity <strong>{ev.current_activity.toFixed(2)}</strong></span>
+                        <span>Baseline activity <strong>{ev.baseline_activity.toFixed(2)}</strong></span>
+                        <span>Direction <strong>{ev.direction}</strong></span>
+                        <span>Anomaly score <strong>{ev.anomaly_score.toFixed(2)}</strong></span>
+                      </div>
+
+                      {ev.rule_alerts?.length > 0 && (
+                        <div className="insight-rule-alerts">
+                          {ev.rule_alerts.map((alert, idx) => (
+                            <span key={idx} className="insight-alert-chip">
+                              🚩 {alert.direction}: {alert.reason}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+
+                      <div className="insight-section insight-severity">
+                        <div className="insight-section-heading">
+                          <span>Severity</span>
+                          <span className={`level-badge ${severity.className}`}>{severity.label}</span>
+                        </div>
+                        <p className="insight-section-text">{sections.SEVERITY}</p>
+                      </div>
+
+                      <div className="insight-section">
+                        <div className="insight-section-heading"><span>📋 Evidence</span></div>
+                        <p className="insight-section-text">{sections.EVIDENCE}</p>
+                      </div>
+
+                      <div className="insight-section insight-interpretation">
+                        <div className="insight-section-heading">
+                          <span>🔮 Interpretation</span>
+                          <span className="insight-inference-tag">Inference — not a confirmed fact</span>
+                        </div>
+                        <p className="insight-section-text">{sections.INTERPRETATION}</p>
+                      </div>
+
+                      <div className="insight-section">
+                        <div className="insight-section-heading"><span>🔧 Next Checks</span></div>
+                        <p className="insight-section-text">{sections.NEXTCHECKS}</p>
+                      </div>
+
+                      <div className="insight-model-tag">Model: {insight.model}</div>
+                    </div>
+                  );
+                })()}
               </div>
             </div>
           ) : (
