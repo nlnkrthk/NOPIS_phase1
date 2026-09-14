@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "nopis-network-intelligence": {
+      "command": "python",
+      "args": [".claude/mcp_server.py"],
+      "env": {
+        "NOPIS_API_BASE_URL": "http://127.0.0.1:8000"
+      },
+      "description": "NOPIS Network Intelligence MCP server. Thin wrapper over the existing NOPIS FastAPI endpoints. Requires the FastAPI server to be running at http://127.0.0.1:8000 before any tool is called."
+    }
+  }
+}

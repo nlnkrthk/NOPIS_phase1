@@ -37,10 +37,6 @@ Phase_5/dist/
 # Phase 6 ML models
 Phase_6/ml/
 
-# AI Agent artifacts
-AGENTS.md
-CLAUDE.md
-.claude/
 
 # Root-level secrets (Claude API key). Phase_5/.env has no secrets and stays tracked.
 /.env

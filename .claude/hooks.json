@@ -1,0 +1,20 @@
+{
+  "hooks": [
+    {
+      "description": "C10 Post-Edit: Run grain/duplicate and ML2 leakage checks after Python edits under spark/ or ml/",
+      "event": "PostToolUse",
+      "matcher": {
+        "tool_name": ["Edit", "Write", "MultiEdit"]
+      },
+      "command": "python .claude/hooks/run_post_edit_checks.py"
+    },
+    {
+      "description": "C10 Pre-Action: Block edits to sensitive Airflow DAGs and pipeline configuration without explicit approval",
+      "event": "PreToolUse",
+      "matcher": {
+        "tool_name": ["Edit", "Write", "MultiEdit"]
+      },
+      "command": "python .claude/hooks/run_pre_action_check.py"
+    }
+  ]
+}
