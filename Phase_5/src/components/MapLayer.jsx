@@ -1,7 +1,25 @@
-import React, { useMemo } from 'react';
-import { MapContainer, TileLayer, GeoJSON } from 'react-leaflet';
+import React, { useEffect, useMemo } from 'react';
+import { MapContainer, TileLayer, GeoJSON, useMap } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
+
+function MapResizeHandler() {
+  const map = useMap();
+
+  useEffect(() => {
+    const container = map.getContainer();
+    const resizeObserver = new ResizeObserver(() => {
+      map.invalidateSize({ animate: false });
+    });
+
+    resizeObserver.observe(container);
+    map.invalidateSize({ animate: false });
+
+    return () => resizeObserver.disconnect();
+  }, [map]);
+
+  return null;
+}
 
 export default function MapLayer({ geoData, hotspots, alerts, onGridSelect }) {
   // Center of Milan
@@ -105,6 +123,7 @@ export default function MapLayer({ geoData, hotspots, alerts, onGridSelect }) {
 
   return (
     <MapContainer center={center} zoom={12} style={{ height: '500px', width: '100%', borderRadius: '0.5rem' }}>
+      <MapResizeHandler />
       {/* Light OpenStreetMap basemap */}
       <TileLayer
         attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'

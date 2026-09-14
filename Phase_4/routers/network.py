@@ -348,11 +348,15 @@ def grid_evidence(
 # SEVERITY / EVIDENCE / INTERPRETATION / NEXTCHECKS explanation.
 @router.get("/grid/{grid_id}/insight", response_model=NetworkInsightResponse)
 def grid_insight(
-    grid_id: int = Path(..., description="Grid identifier to generate a Claude network insight for")
+    grid_id: int = Path(..., description="Grid identifier to generate a Claude network insight for"),
+    as_of: Optional[datetime] = Query(
+        None,
+        description="Optional point-in-time boundary matching the prediction context",
+    ),
 ):
     db = SessionLocal()
     try:
-        evidence = get_evidence_object(db=db, grid_id=grid_id)
+        evidence = get_evidence_object(db=db, grid_id=grid_id, as_of=as_of)
         if evidence is None:
             raise HTTPException(
                 status_code=404,

@@ -75,7 +75,6 @@ inferred_df.printSchema()
 
 from pyspark.sql.functions import (
     count,
-    countDistinct,
     min,
     max
 )
@@ -129,8 +128,8 @@ print("Partition count:", partition_count)
 
 from pyspark.sql.functions import min, max, col
 
-print("Minimum CellID:", raw_network_df.select(min("CellID")).first()[0])
-print("Maximum CellID:", raw_network_df.select(max("CellID")).first()[0])
+print("Minimum CellID:", raw_network_df.select(min("CellID")).first()[0]) # type: ignore
+print("Maximum CellID:", raw_network_df.select(max("CellID")).first()[0]) # type: ignore
 
 missing_source_files = raw_network_df.filter(
     col("input_file_name").isNull()

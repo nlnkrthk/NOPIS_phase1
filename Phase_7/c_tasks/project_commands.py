@@ -142,7 +142,7 @@ def explain_grid(grid_id: int, as_of: Optional[str] = None) -> Dict[str, Any]:
 
         # ML Features
         parsed_as_of = datetime.fromisoformat(as_of) if as_of else None
-        features = get_grid_features(db, grid_id=grid_id, as_of=parsed_as_of)
+        features = get_grid_features(db, grid_id=grid_id, as_of=parsed_as_of) or {}
 
         # Recent activity
         activity_history = get_grid_activity(db, grid_id=grid_id, as_of=parsed_as_of)
@@ -150,7 +150,17 @@ def explain_grid(grid_id: int, as_of: Optional[str] = None) -> Dict[str, Any]:
 
         # ML Risk
         from Phase_4.schemas import PredictRiskRequest
-        risk_req = PredictRiskRequest(grid_id=grid_id, as_of=parsed_as_of)
+        risk_req = PredictRiskRequest(
+            grid_id=grid_id,
+            as_of=parsed_as_of,
+            model_version="v1",
+            avg_activity=features.get("avg_activity", 0.0),
+            activity_growth=features.get("activity_growth", 1.0),
+            active_hours=features.get("active_hours", 0.0),
+            peak_ratio=features.get("peak_ratio", 0.0),
+            variability=features.get("variability", 0.0),
+            internet_share=latest_point.get("internet_share", 0.0),
+        )
         risk_resp = predict_grid_risk(db, risk_req)
     finally:
         db.close()
@@ -246,9 +256,24 @@ def review_anomaly(grid_id: int, as_of: Optional[str] = None) -> Dict[str, Any]:
         grid_alerts = [a for a in all_alerts if a["grid_id"] == grid_id]
         rule_alert = grid_alerts[0] if grid_alerts else None
 
+        # Gather the feature values required by PredictRiskRequest.
+        features = get_grid_features(db, grid_id=grid_id, as_of=parsed_as_of) or {}
+        activity_history = get_grid_activity(db, grid_id=grid_id, as_of=parsed_as_of)
+        latest_point = activity_history[-1] if activity_history else {}
+
         # 2. Classifier output
         from Phase_4.schemas import PredictRiskRequest
-        risk_req = PredictRiskRequest(grid_id=grid_id, as_of=parsed_as_of)
+        risk_req = PredictRiskRequest(
+            grid_id=grid_id,
+            as_of=parsed_as_of,
+            model_version="v1",
+            avg_activity=features.get("avg_activity", 0.0),
+            activity_growth=features.get("activity_growth", 1.0),
+            active_hours=features.get("active_hours", 0.0),
+            peak_ratio=features.get("peak_ratio", 0.0),
+            variability=features.get("variability", 0.0),
+            internet_share=latest_point.get("internet_share", 0.0),
+        )
         risk_resp = predict_grid_risk(db, risk_req)
 
         # 3. Anomaly score from network_anomaly_scores

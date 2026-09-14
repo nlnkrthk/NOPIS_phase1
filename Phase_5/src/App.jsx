@@ -20,10 +20,24 @@ export default function App() {
       <Navbar activePage={activePage} setActivePage={setActivePage} />
 
       <main className="main-content">
-        {activePage === 'summary' && <NetworkSummary />}
-        {activePage === 'grid' && <GridActivity initialGridId={targetGrid} />}
-        {activePage === 'hotspots' && <HotspotsAlerts onNavigateToGrid={handleNavigateToGrid} />}
-        {activePage === 'risk' && <PredictiveRisk />}
+        <header className="page-intro">
+          <p className="eyebrow">01. System</p>
+          <h1>Network Intelligence</h1>
+          <p className="intro-copy">Operational visibility across Milan’s monitored cells, structured for decisive action.</p>
+        </header>
+
+        <div hidden={activePage !== 'summary'}>
+          <NetworkSummary />
+        </div>
+        <div hidden={activePage !== 'grid'}>
+          <GridActivity initialGridId={targetGrid} />
+        </div>
+        <div hidden={activePage !== 'hotspots'}>
+          <HotspotsAlerts onNavigateToGrid={handleNavigateToGrid} />
+        </div>
+        <div hidden={activePage !== 'risk'}>
+          <PredictiveRisk />
+        </div>
       </main>
 
       <footer className="app-footer">

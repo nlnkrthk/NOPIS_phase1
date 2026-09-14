@@ -128,7 +128,7 @@ export default function PredictiveRisk() {
     setInsightError(null);
     setInsight(null);
     try {
-      const data = await getGridInsight(submittedInputs.grid_id);
+      const data = await getGridInsight(submittedInputs.grid_id, submittedInputs.as_of);
       setInsight(data);
     } catch (err) {
       setInsightError(err.message || 'Failed to generate AI insight');

@@ -597,7 +597,9 @@ def get_grid_features(db: Session, grid_id: int, as_of: Optional[datetime] = Non
 # C1 — Task 229. Build the curated evidence object for the Claude Network
 # Insight Generator from the grid_features + network_anomaly_scores JOIN.
 # Only matched rows are used — an unmatched grid_id returns None rather than
-# a fabricated evidence object. No existing table or pipeline is modified.
+# a fabricated evidence object. Anomaly scores are hourly while feature
+# timestamps can fall between hours, so use the latest score at or before the
+# feature timestamp. No existing table or pipeline is modified.
 EVIDENCE_QUERY = text("""
     SELECT
         gf.grid_id            AS grid_id,
@@ -615,14 +617,26 @@ EVIDENCE_QUERY = text("""
     FROM grid_features gf
     JOIN network_anomaly_scores nas
         ON gf.grid_id = nas.grid_id
-        AND gf.feature_timestamp = nas.feature_timestamp
+        AND nas.feature_timestamp <= gf.feature_timestamp
     WHERE gf.grid_id = :grid_id
+        AND (:as_of IS NULL OR (
+            gf.feature_timestamp <= :as_of
+            AND nas.feature_timestamp <= :as_of
+        ))
+    ORDER BY gf.feature_timestamp DESC, nas.feature_timestamp DESC
     LIMIT 1
 """)
 
 
-def get_evidence_object(db: Session, grid_id: int) -> Optional[dict]:
-    row = db.execute(EVIDENCE_QUERY, {"grid_id": grid_id}).mappings().first()
+def get_evidence_object(
+    db: Session,
+    grid_id: int,
+    as_of: Optional[datetime] = None,
+) -> Optional[dict]:
+    row = db.execute(
+        EVIDENCE_QUERY,
+        {"grid_id": grid_id, "as_of": as_of},
+    ).mappings().first()
     if row is None:
         return None
 

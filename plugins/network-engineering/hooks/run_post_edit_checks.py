@@ -42,7 +42,7 @@ WATCHED_DIRS = ("spark/", "spark\\", "ml/", "ml\\")
 # ── Test commands ─────────────────────────────────────────────────────────────
 GRAIN_TEST_CMD = [
     sys.executable, "-m", "pytest",
-    "test_pipeline_91_92.py",
+    "tests/test_pipeline_91_92.py",
     "-k", "TestSparkFailurePath",
     "-v", "--tb=short", "--no-header",
 ]

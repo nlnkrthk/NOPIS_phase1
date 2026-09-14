@@ -85,6 +85,20 @@ export default function GridActivity({ initialGridId }) {
     }
   }, []);
 
+  useEffect(() => {
+    if (!initialGridId || String(initialGridId) === activeGridId) return;
+
+    const nextGridId = String(initialGridId);
+    setGridInput(nextGridId);
+    if (filterMode === 'date_hour') {
+      fetchGridData(nextGridId, 'date_hour', { date: dateFilter, hour: hourFilter });
+    } else if (filterMode === 'range') {
+      fetchGridData(nextGridId, 'range', rangeOptions());
+    } else {
+      fetchGridData(nextGridId, 'as_of', { as_of: asOfTimestamp });
+    }
+  }, [initialGridId]);
+
   const handleSearch = (e) => {
     e.preventDefault();
     const cleanId = gridInput.trim();

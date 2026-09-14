@@ -136,8 +136,9 @@ export async function getGridEvidence(gridId) {
 
 // C1 — Task 230. Fetch the evidence object plus Claude's four-section
 // (SEVERITY / EVIDENCE / INTERPRETATION / NEXTCHECKS) explanation for a grid.
-export async function getGridInsight(gridId) {
-  const response = await fetch(`${API_BASE_URL}/network/grid/${gridId}/insight`);
+export async function getGridInsight(gridId, asOf = '') {
+  const params = asOf ? `?as_of=${encodeURIComponent(asOf)}` : '';
+  const response = await fetch(`${API_BASE_URL}/network/grid/${gridId}/insight${params}`);
   if (!response.ok) {
     const errorData = await response.json().catch(() => ({}));
     const error = new Error(errorData.detail || `AI insight request failed: ${response.status}`);

@@ -22,9 +22,9 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
-# Load the nearest .env (project root) once, without overriding a variable the
+# Load the repository-root .env once, without overriding a variable the
 # environment already provides (e.g. in production, where it is set directly).
-load_dotenv(dotenv_path=Path(__file__).resolve().parent.parent / ".env", override=False)
+load_dotenv(dotenv_path=Path(__file__).resolve().parents[2] / ".env", override=False)
 
 ANTHROPIC_MODEL = "claude-opus-5"
 NVIDIA_BASE_URL = "https://integrate.api.nvidia.com/v1"
