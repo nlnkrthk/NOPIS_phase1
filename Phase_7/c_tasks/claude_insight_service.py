@@ -138,7 +138,12 @@ def _generate_via_anthropic(evidence: dict) -> str:
 def _generate_via_nvidia(evidence: dict) -> str:
     from openai import OpenAI
 
-    client = OpenAI(base_url=NVIDIA_BASE_URL, api_key=os.environ["NVIDIA_API_KEY"])
+    import httpx
+    client = OpenAI(
+        base_url=NVIDIA_BASE_URL, 
+        api_key=os.environ["NVIDIA_API_KEY"],
+        http_client=httpx.Client(verify=False)
+    )
     completion = client.chat.completions.create(
         model=NVIDIA_MODEL,
         messages=[
